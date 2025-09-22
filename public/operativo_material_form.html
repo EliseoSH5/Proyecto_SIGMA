@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Operativo • Añadir material</title>
+    <link rel="stylesheet" href="./css/styles.css" />
+    <link rel="stylesheet" href="./css/operativo.css" />
+    <link rel="stylesheet" href="./css/dashboard_patch.css" />
+  </head>
+  <body>
+    <div class="app">
+      <div id="sidebar-container"></div>
+      <main class="main">
+        <div class="topbar">
+          <div class="bell">🔔</div>
+          <div class="avatar">
+            <div class="avatar-badge" id="avatar">HD</div>
+            <div>
+              <div id="fullName">Happy Doggo</div>
+              <div class="small" id="emailLabel">mail@example.com</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="page">
+          <h2>INFORMACION MATERIAL</h2>
+          <div class="grid cols-2">
+            <div>
+              <div class="section-title">PROGRAMA</div>
+              <select id="programa">
+                <option>Programa</option>
+                <option>Contingencia</option>
+              </select>
+            </div>
+            <div>
+              <div class="section-title">CATEGORIA</div>
+              <input id="categoria" class="input" placeholder="Barrena" />
+            </div>
+
+            <div class="grid cols-1" style="grid-column: 1/3">
+              <div class="section-title">ESPECIFICACION</div>
+              <textarea
+                id="especificacion"
+                class="input"
+                rows="3"
+                placeholder="Descripción detallada..."
+              ></textarea>
+            </div>
+
+            <div>
+              <div class="section-title">CANTIDAD</div>
+              <input
+                id="cantidad"
+                class="input"
+                type="number"
+                min="0"
+                step="1"
+                value="1"
+              />
+            </div>
+            <div>
+              <div class="section-title">UNIDAD</div>
+              <input id="unidad" class="input" placeholder="Pieza" />
+            </div>
+
+            <div>
+              <div class="section-title">PROVEEDOR</div>
+              <input id="proveedor" class="input" placeholder="SLB" />
+            </div>
+            <div>
+              <div class="section-title">ORDEN DE SERVICIO</div>
+              <input id="ordenServicio" class="input" placeholder="PO-45698" />
+            </div>
+
+            <div>
+              <div class="section-title">AVANZADA</div>
+              <input id="fechaAvanzada" type="date" class="input" />
+            </div>
+            <div>
+              <div class="section-title">LINK REPORTE</div>
+              <input
+                id="linkAvanzada"
+                class="input"
+                placeholder="https://..."
+              />
+            </div>
+
+            <div>
+              <div class="section-title">INSPECCION</div>
+              <input id="fechaInspeccion" type="date" class="input" />
+            </div>
+            <div>
+              <div class="section-title">LINK REPORTE</div>
+              <input
+                id="linkInspeccion"
+                class="input"
+                placeholder="https://..."
+              />
+            </div>
+
+            <div>
+              <div class="section-title">LOGISTICA</div>
+              <select id="logistica">
+                <option>En transito</option>
+                <option>En almacén</option>
+                <option>Entregado</option>
+              </select>
+            </div>
+            <div>
+              <div class="section-title">ALERTA</div>
+              <select id="alerta" class="input">
+                <option value="azul">Azul</option>
+                <option value="verde">Verde</option>
+                <option value="amarillo">Amarillo</option>
+                <option value="rojo">Rojo</option>
+              </select>
+            </div>
+
+            <div class="grid cols-1" style="grid-column: 1/3">
+              <div class="section-title">COMENTARIO</div>
+              <textarea
+                id="comentario"
+                class="input"
+                rows="3"
+                placeholder="Notas adicionales..."
+              ></textarea>
+            </div>
+          </div>
+
+          <div class="grid cols-2" style="margin-top: 14px">
+            <button class="btn primary" id="btnSave">Guardar</button>
+            <a class="btn" id="btnCancel">Cancelar</a>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script src="./js/dashboard.js"></script>
+    <script type="module" src="./js/operativo_material_form.js"></script>
+    <script type="module" src="./js/init_partials.js"></script>
+
+  </body>
+</html>

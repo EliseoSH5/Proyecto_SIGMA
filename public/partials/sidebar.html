@@ -1,0 +1,64 @@
+<!-- public/partials/sidebar.html -->
+<aside class="sidebar">
+  <div class="side-logo">Σ</div>
+
+  <nav class="menu">
+
+    <!-- Dashboard -->
+    <a class="item" href="./dashboard.html">📊 Dashboard</a>
+
+    <!-- Inventarios -->
+    <div class="item has-sub" data-menu="inventarios">
+      📦 Inventarios <span class="chev">▾</span>
+    </div>
+    <div class="sub" data-sub="inventarios">
+      <!-- Define las rutas reales cuando estén listas -->
+      <a href="./inv_matriz.html">Matriz</a>
+      <a href="./inv_alertas.html">Alertas</a>
+      <a href="./inv_reportes.html">Reportes</a>
+    </div>
+
+    <!-- Operativo -->
+    <div class="item has-sub" data-menu="operativo">
+      ⚙️ Operativo <span class="chev">▾</span>
+    </div>
+    <div class="sub" data-sub="operativo">
+      <a href="./operativo_matriz.html">Matriz</a>
+      <a href="./operativo_alertas.html">Alertas</a>
+      <a href="./operativo_reportes.html">Reportes</a>
+    </div>
+
+    <!-- Estrategia -->
+    <div class="item has-sub" data-menu="estrategia">
+      🧭 Estrategia <span class="chev">▾</span>
+    </div>
+    <div class="sub" data-sub="estrategia">
+      <a href="./estrategia_planes.html">Planes</a>
+      <a href="./estrategia_kpis.html">KPIs</a>
+      <a href="./estrategia_reportes.html">Reportes</a>
+    </div>
+
+    <!-- Disciplina Operativa -->
+    <div class="item has-sub" data-menu="disciplina">
+      🧩 Disciplina Operativa <span class="chev">▾</span>
+    </div>
+    <div class="sub" data-sub="disciplina">
+      <a href="./do_procesos.html">Procesos</a>
+      <a href="./do_auditorias.html">Auditorías</a>
+      <a href="./do_reportes.html">Reportes</a>
+    </div>
+
+    <!-- SRM -->
+    <div class="item has-sub" data-menu="srm">
+      🤝 SRM <span class="chev">▾</span>
+    </div>
+    <div class="sub" data-sub="srm">
+      <a href="./srm_proveedores.html">Proveedores</a>
+      <a href="./srm_contratos.html">Contratos</a>
+      <a href="./srm_reportes.html">Reportes</a>
+    </div>
+
+    <!-- Logout -->
+    <div class="logout" id="logout">Log out</div>
+  </nav>
+</aside>

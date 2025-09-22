@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Operativo • Matriz</title>
+    <link rel="stylesheet" href="./css/styles.css" />
+    <link rel="stylesheet" href="./css/operativo.css" />
+    <link rel="stylesheet" href="./css/dashboard_patch.css" />
+  </head>
+  <body>
+    <div class="app">
+       <div id="sidebar-container"></div>
+
+      <main class="main">
+        <div class="topbar">
+          <div class="bell">🔔</div>
+          <div class="avatar">
+            <div class="avatar-badge" id="avatar">HD</div>
+            <div>
+              <div id="fullName">Happy Doggo</div>
+              <div class="small" id="emailLabel">mail@example.com</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="page">
+          <h2>PLANEACIÓN OPERATIVA</h2>
+          <div class="toolbar">
+            <button class="btn" id="btnFilter">🔎 Filtrar</button>
+            <button class="btn primary" id="btnAdd">Añadir pozo</button>
+          </div>
+
+          <!-- Panel de filtros con el estilo de Materiales -->
+          <div
+            id="filters"
+            class="card"
+            style="display: none; margin-bottom: 12px"
+          >
+            <div class="grid cols-3">
+              <div>
+                <div class="section-title">Buscar</div>
+                <input id="fSearch" class="input" placeholder="Equipo o Pozo" />
+              </div>
+              <div>
+                <div class="section-title">Tipo de pozo</div>
+                <select id="fType" class="input">
+                  <option value="">Todos</option>
+                  <option value="terrestre">Terrestre</option>
+                  <option value="marino">Marino</option>
+                </select>
+              </div>
+              <div>
+                <div class="section-title">Ordenar por</div>
+                <div style="display: flex; gap: 8px">
+                  <select id="fSort" class="input">
+                    <option value="id">Recientes</option>
+                    <option value="team">Equipo</option>
+                    <option value="name">Pozo</option>
+                    <option value="start_date">Fecha inicio</option>
+                    <option value="stages_count"># Etapas</option>
+                  </select>
+                  <select id="fOrder" class="input" style="max-width: 120px">
+                    <option value="desc">Desc</option>
+                    <option value="asc">Asc</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div
+              class="toolbar"
+              style="justify-content: flex-start; margin-top: 8px"
+            >
+              <button class="btn" id="fClear">Limpiar</button>
+              <button class="btn primary" id="fApply">Aplicar</button>
+            </div>
+          </div>
+
+          <table class="table" id="wellsTable">
+            <thead>
+              <tr>
+                <th style="width: 48px">
+                  <input type="checkbox" id="chkAll" />
+                </th>
+                <th>EQUIPO</th>
+                <th>POZO</th>
+                <th>AVANCE ACTUAL</th>
+                <th style="width: 140px">ACCION</th>
+              </tr>
+            </thead>
+            <tbody id="wellsBody">
+              <!-- filas o estado vacío -->
+            </tbody>
+          </table>
+
+          <div id="emptyState" class="row-empty" style="display: none">
+            <div style="font-size: 42px">📦</div>
+            <div class="badge">AÑADE UN POZO NUEVO</div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <div class="modal" id="confirmModal">
+      <div class="box">
+        <div style="font-size: 32px">🗑️</div>
+        <h3>BORRAR REGISTRO</h3>
+        <div>¿Deseas borrar este pozo?</div>
+        <div class="row">
+          <button class="btn neutral" data-action="cancel">Cancelar</button>
+          <button class="btn danger" data-action="ok">Sí, borrar</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="./js/dashboard.js"></script>
+    <script type="module" src="./js/operativo_matriz.js"></script>
+    <script type="module" src="./js/init_partials.js"></script>
+
+  </body>
+</html>

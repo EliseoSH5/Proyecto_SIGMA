@@ -1,0 +1,534 @@
+/* styles.css — INDEX con responsive y hamburguesa */
+
+/* Tipografía Exo */
+@import url("https://fonts.googleapis.com/css2?family=Exo:wght@400;600;700&display=swap");
+
+:root {
+  --bg: #111315;
+  --panel: #1b1f23;
+  --panel-2: #101316;
+  --text: #f2f2f2;
+  --muted: #a8b3bd;
+  --brand: #f2a93b;
+  --brand-2: #efb76c;
+  --good: #23c483;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  --radius: 18px;
+  --sidebar-bg: #111315;   /* mismo tono oscuro del sidebar */
+  --topbar-bg:  #0e1013;   /* mismo tono oscuro de la barra superior */
+  --topbar-br:  #1f2937;   /* línea separadora sutil */
+  --page-bg:    #ffffff;   /* FONDO BLANCO para el contenido principal */
+}
+
+
+/* Fondo blanco en el área de trabajo */
+body, .app, .main {
+  background: var(--page-bg) !important;
+}
+
+body.page-index {
+  --page-bg: #0B0B0B;
+}
+
+/* Sidebar conserva su look oscuro */
+.sidebar {
+  background: var(--sidebar-bg) !important;
+  color: #fff;
+}
+
+/* Topbar conserva su look oscuro */
+.topbar {
+  background: #F2BF7C !important;
+  color: #fff;
+  border-bottom: 1px solid var(--topbar-br);
+}
+
+/* Cards y tablas ya eran blancas; garantizamos contraste y sombras suaves */
+.card, .table {
+  background: #fff;
+}
+
+/* En caso de que hubiera algún gradiente/fondo heredado del layout */
+.main .page {
+  background: transparent;
+}
+
+/* Links en topbar/sidebar legibles en fondo oscuro */
+.sidebar a, .topbar a {
+  color: #e5e7eb;
+}
+.sidebar a:hover, .topbar a:hover {
+  color: #fff;
+}
+
+
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: "Exo", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto,
+    Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  color: var(--text);
+  background: var(--bg);
+}
+
+/* ===== Navbar (Landing) ===== */
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 22px 24px;
+  position: relative;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.nav img.logo {
+  width: 212px;
+  height: 48px;
+  object-fit: contain;
+  display: block;
+}
+
+/* enlaces desktop */
+.links {
+  display: flex;
+  align-items: center;
+}
+.nav a {
+  color: var(--text);
+  text-decoration: none;
+  font-size: 16px; /* tamaño del texto */
+  margin-left: 32px; /* separación entre enlaces */
+}
+
+.nav a.btn {
+  width: 170px; /* ancho botón */
+  height: 56px; /* alto botón */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px; /* bordes 8px */
+  border: 1px solid #2a2f36;
+  box-shadow: var(--shadow);
+  background: var(--brand);
+  color: #151515;
+  font-weight: 700;
+}
+.nav a.btn:hover {
+  filter: brightness(1.05);
+}
+
+/* ===== Hero (Landing) ===== */
+.hero {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 40px;
+  max-width: 1200px;
+  margin: 32px auto;
+  padding: 40px 24px 72px;
+  
+}
+.hero h1 {
+  font-size: 56px; /* tamaño de título */
+  line-height: 1.1;
+  margin: 0 0 20px;
+}
+.hero p {
+  color: var(--muted);
+  font-size: 24px; /* tamaño de subtítulo */
+}
+.hero .mock {
+  background: linear-gradient(135deg, #20242a, #171a1f);
+  border: 1px solid #2a2f36;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 12px;
+  min-height: 380px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.hero .mock img {
+  width: 543px; /* dimensiones de la imagen del hero (desktop) */
+  height: 294px;
+  object-fit: contain;
+  border-radius: 12px;
+  opacity: 0.95;
+}
+
+/* ===== Login (sin cambios funcionales) ===== */
+.login-wrap {
+  display: grid;
+  grid-template-columns: 1fr 520px;
+  min-height: 100vh;
+}
+.login-left {
+  background: url("./assets/Login_sigma.png") center/cover no-repeat;
+  position: relative;
+}
+.login-left::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+}
+.login-right {
+  background: #111315;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+.card {
+  width: min(520px, 92vw);
+  background: #0f1114;
+  border: 1px solid #232a31;
+  border-radius: 24px;
+  padding: 30px 26px;
+  box-shadow: var(--shadow);
+}
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  font-weight: 800;
+  font-size: 28px;
+}
+.logo .tower {
+  width: 18px;
+  height: 28px;
+  border: 3px solid var(--text);
+  border-bottom: none;
+  position: relative;
+  border-radius: 3px;
+}
+.logo .tower::before,
+.logo .tower::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  height: 3px;
+  background: var(--text);
+}
+.logo .tower::before {
+  top: 7px;
+}
+.logo .tower::after {
+  top: 14px;
+}
+.logo .opex {
+  color: var(--brand);
+}
+h2 {
+  margin: 10px 0 22px;
+}
+.field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid #2a323a;
+  padding: 12px 6px;
+  margin-bottom: 16px;
+}
+.field input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  padding: 6px 2px;
+}
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 14px;
+  margin: 8px 0 18px;
+}
+button.primary {
+  width: 100%;
+  background: var(--brand);
+  border: none;
+  color: #151515;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 12px 16px;
+  cursor: pointer;
+}
+button.primary:hover {
+  filter: brightness(1.05);
+}
+
+/* ===== Dashboard (igual que antes) ===== */
+.app {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  min-height: 100vh;
+}
+.sidebar {
+  background: #0e1013;
+  border-right: 1px solid #232a31;
+  padding: 18px 14px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+.side-logo {
+  font-weight: 900;
+  font-size: 36px;
+  padding: 6px 10px 22px;
+}
+.side-logo .e {
+  color: var(--brand);
+}
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.item {
+  color: #e7e9ed;
+  padding: 10px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.item:hover {
+  background: #161a20;
+}
+.item.active {
+  background: #22262d;
+  color: #fff;
+}
+.sub {
+  display: none;
+  padding-left: 8px;
+}
+.sub a {
+  display: block;
+  padding: 8px 12px;
+  margin: 4px 0;
+  border-radius: 8px;
+  color: #c9d1d9;
+  text-decoration: none;
+}
+.sub a:hover {
+  background: #171b22;
+}
+.item.open + .sub {
+  display: block;
+}
+.main {
+  display: flex;
+  flex-direction: column;
+}
+.topbar {
+  background: linear-gradient(180deg, var(--brand-2), var(--brand));
+  color: #111;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  padding: 10px 18px;
+  height: 56px;
+  position: sticky;
+  top: 0;
+}
+.bell {
+  width: 28px;
+  height: 28px;
+  background: #fff3;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+}
+.avatar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+
+}
+.avatar-badge {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #2d7df4;
+  color: #fff;
+  font-weight: 800;
+}
+.content {
+  padding: 24px;
+}
+.logout {
+  margin-top: auto;
+  padding: 10px 12px;
+  color: #ffdddd;
+  border: 1px dashed #3a2a2a;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.logout:hover {
+  background: #1a1212;
+}
+.small {
+  font-size: 12px;
+  color: #111;
+  opacity: 0.8;
+}
+
+  #nav-toggle {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+  }
+
+/* =========================================================
+   Responsive
+   =======================================================*/
+
+/* —— Punto de quiebre tablet/móvil —— */
+@media (max-width: 768px) {
+  /* HERO: texto arriba y mock abajo */
+  .hero {
+    grid-template-columns: 1fr; /* una columna */
+    gap: 24px;
+    padding: 24px 16px 40px;
+    margin: 12px auto;
+  }
+  .hero .mock {
+    min-height: auto;
+    padding: 8px;
+  }
+  .hero .mock img {
+    width: 100%; /* escalar en móvil */
+    height: auto;
+  }
+  .hero h1 {
+    font-size: 36px; /* escala tipográfica en móvil */
+  }
+  .hero p {
+    font-size: 18px;
+  }
+
+  /* NAV: menú hamburguesa */
+  /* Estructura esperada en el DOM:
+     <div class="brand">...</div>
+     <input type="checkbox" id="nav-toggle">
+     <label class="hamb" for="nav-toggle">...</label>
+     <div class="links">...</div>
+  */
+
+
+  .hamb {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    border: 1px solid #2a2f36;
+    cursor: pointer;
+    margin-left: auto;
+  }
+  .hamb .bar {
+    width: 20px;
+    height: 2px;
+    background: var(--text);
+    position: relative;
+    display: block;
+  }
+  .hamb .bar::before,
+  .hamb .bar::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--text);
+  }
+  .hamb .bar::before {
+    top: -6px;
+  }
+  .hamb .bar::after {
+    top: 6px;
+  }
+
+  /* Ocultar links en móvil por defecto */
+  .links {
+    display: none;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    background: var(--panel);
+    border: 1px solid #2a2f36;
+    border-radius: 12px;
+    padding: 12px;
+    margin: 8px 16px 0;
+    flex-direction: column;
+    gap: 10px;
+    box-shadow: var(--shadow);
+  }
+  .links a {
+    margin: 0;
+    padding: 10px 12px;
+    border-radius: 8px;
+    display: block;
+    background: #15181c;
+    border: 1px solid #222831;
+  }
+  .links a.btn {
+    width: 100%;
+    height: 48px; /* botón más compacto en móvil */
+  }
+
+  /* Mostrar links cuando el checkbox está activo */
+  #nav-toggle:checked ~ .links {
+    display: flex;
+  }
+
+  /* Ajustes de navbar contenedor */
+  .nav {
+    padding: 14px 16px;
+  }
+}
+
+/* —— Punto de quiebre desktop mediano —— */
+@media (max-width: 1024px) {
+  .hero {
+    max-width: 960px;
+  }
+  .nav {
+    max-width: 960px;
+  }
+}
+
+/* —— Desktop grande —— */
+@media (min-width: 1025px) {
+  .hamb {
+    display: none;
+  } /* ocultar hamburguesa en desktop */
+}

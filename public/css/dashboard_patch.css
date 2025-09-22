@@ -1,0 +1,248 @@
+/* === Expandir contenido y dejar 16px de margen lateral global === */
+/* Ajusta este valor si tu sidebar mide distinto */
+:root {
+  --sidebar-width: 260px;
+}
+
+/* El main ocupa todo el espacio restante y deja 16px de respiro */
+.app .main {
+  width: calc(100vw - var(--sidebar-width));
+  box-sizing: border-box;
+}
+
+/* Quita límites viejos de .page (ej. max-width:1200px) y márgenes auto */
+.page {
+  max-width: none !important;
+  margin: 0 !important;
+  padding-left: 32px !important; /* ya lo da .main */
+  padding-right: 32px !important; /* ya lo da .main */
+  box-sizing: border-box;
+}
+
+/* Asegura que tablas y cards usen todo el ancho disponible */
+.page .table,
+.page .card {
+  width: 100%;
+}
+
+/* Por si algún contenedor intermedio tuviera un ancho fijo */
+.main > * {
+  max-width: 100% !important;
+}
+
+/* === Botón Añadir pozo con ancho fijo === */
+#btnAdd {
+  width: 120px !important;
+  min-width: 120px !important;
+  max-width: 120px !important;
+  text-align: center;
+  justify-content: center; /* por si usa flex */
+  border-radius: 8px;
+}
+
+/* Botón aplicar filtros en materiales */
+#filters #mApply {
+  width: 140px !important;
+  min-width: 140px !important;
+  max-width: 140px !important;
+  text-align: center;
+  justify-content: center;
+  border-radius: 8px;
+}
+
+/* Botón aplicar en Etapas */
+#sApply {
+  width: 140px !important;
+  min-width: 140px !important;
+  max-width: 140px !important;
+  text-align: center;
+  justify-content: center;
+  border-radius: 8px;
+}
+
+/* Botón aplicar filtros en Matriz (Planeación Operativa) */
+#filters #fApply {
+  width: 140px !important;
+  min-width: 140px !important;
+  max-width: 140px !important;
+  text-align: center;
+  justify-content: center;
+  border-radius: 8px;
+}
+
+/* Botón aplicar filtros en Alertas */
+#filters #fApply {
+  width: 140px !important;
+  min-width: 140px !important;
+  max-width: 140px !important;
+  text-align: center;
+  justify-content: center;
+}
+
+/* Modal estilo Alertas-detalle */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+.modal {
+  background: #fff;
+  border-radius: 14px;
+  max-width: 980px;
+  width: 96%;
+  padding: 20px 20px 18px;
+}
+.modal header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.modal .title {
+  font-weight: 800;
+  font-size: 18px;
+}
+.modal .subtitle {
+  font-size: 13px;
+  color: #6b7280;
+}
+.modal .modal-grid {
+  gap: 14px;
+}
+.modal .full {
+  grid-column: 1/-1;
+}
+.value {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 10px 12px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+@media (max-width: 900px) {
+  .modal .modal-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* chips de color para alerta (por si no estaban) */
+.alert-chip {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+.alert-azul {
+  background: #1e90ff;
+}
+.alert-verde {
+  background: #16a34a;
+}
+.alert-amarillo {
+  background: #eab308;
+}
+.alert-rojo {
+  background: #ef4444;
+}
+
+/* Backdrop centrado */
+.sigma-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: none; /* se activa con la clase .open o style.display */
+  align-items: center;
+  justify-content: center;
+  z-index: 9999; /* alto para pasar topbar, etc. */
+}
+
+/* Mostrar por clase */
+.sigma-modal-backdrop.open {
+  display: flex;
+}
+
+/* Fallback por estilo inline (por si el JS usa display:flex) */
+.sigma-modal-backdrop[style*="display: flex"] {
+  display: flex;
+}
+
+/* Cuadro del modal (clase única para evitar choques con .modal de frameworks) */
+.sigma-modal {
+  display: block !important; /* anula cualquier display:none heredado */
+  visibility: visible !important;
+  opacity: 1 !important;
+  position: relative !important;
+  background: #fff;
+  border-radius: 14px;
+  max-width: 980px;
+  width: 96%;
+  padding: 20px 20px 18px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.22);
+  z-index: 1;
+}
+
+/* Layout interior del modal */
+.sigma-modal .modal-grid {
+  gap: 14px;
+}
+.sigma-modal .title {
+  font-weight: 800;
+  font-size: 18px;
+}
+.sigma-modal .subtitle {
+  font-size: 13px;
+  color: #6b7280;
+}
+.sigma-modal .full {
+  grid-column: 1 / -1;
+}
+.value {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 10px 12px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+@media (max-width: 900px) {
+  .sigma-modal .modal-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.close-btn {
+  background: transparent;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.report-btn {
+  margin-top: 6px;
+  padding: 6px 12px;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.report-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

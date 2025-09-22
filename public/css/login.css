@@ -1,0 +1,90 @@
+/* ====== Login layout con imagen a la izquierda ====== */
+.login-wrap{
+  display:flex;
+  min-height:100vh;
+  background:#0B0B0B; /* fondo general oscuro */
+  color:#e5e7eb;
+}
+
+/* Columna izquierda: imagen */
+.login-left{
+  flex:1 1 50%;
+  background:url("../assets/bg_login.png") center center / cover no-repeat;
+  position:relative;
+}
+/* Overlay (mejora legibilidad en monitores brillantes) */
+.login-left::after{
+  content:"";
+  position:absolute; inset:0;
+  background:linear-gradient(0deg, rgba(11,11,11,.45), rgba(11,11,11,.45));
+}
+
+/* Columna derecha: formulario centrado */
+.login-right{
+  flex:1 1 50%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:32px 24px;
+}
+
+/* Tarjeta del login */
+.login-right .card{
+  width:100%;
+  max-width:420px;
+  background:#111215;            /* sutilmente más claro que el body */
+  border:1px solid #1f2937;
+  border-radius:16px;
+  padding:28px;
+  box-shadow:0 10px 30px rgba(0,0,0,.35);
+}
+
+/* Logo / título */
+.logo{
+  display:flex; align-items:center; gap:10px;
+  justify-content:center; margin-bottom:14px;
+}
+h2{
+  text-align:center; margin:0 0 16px 0;
+  font-size:22px; font-weight:700; color:#fff;
+}
+
+/* Campos */
+.field{
+  display:flex; align-items:center; gap:10px;
+  background:#0f1114; border:1px solid #263042; color:#c9d1d9;
+  border-radius:10px; padding:12px 12px; margin-bottom:12px;
+}
+.field input{
+  flex:1; background:transparent; border:0; outline:none; color:#e5e7eb;
+  font-size:14px;
+}
+
+/* Fila inferior (recordarme / olvidar) */
+.row{
+  display:flex; align-items:center; justify-content:space-between;
+  margin:6px 0 14px 0; font-size:14px; color:#c9d1d9;
+}
+/* link olvidar (sin inline style por CSP) */
+.forgot-link{
+  color:#c9d1d9; text-decoration:none;
+}
+.forgot-link:hover{ text-decoration:underline; }
+
+/* Botón primario */
+button.primary{
+  width:100%;
+  height:56px;
+  background:#2563eb; color:#fff; border:0;
+  border-radius:8px; font-size:15px; font-weight:600;
+  cursor:pointer; transition:transform .06s ease, background .2s ease;
+}
+button.primary:hover{ background:#1d4ed8; }
+button.primary:active{ transform:translateY(1px); }
+
+/* Responsive: en móviles ocultamos la imagen para priorizar el form */
+@media (max-width: 900px){
+  .login-left{ display:none; }
+  .login-right{ flex-basis:100%; padding:24px 16px; }
+  .login-right .card{ padding:22px; }
+}

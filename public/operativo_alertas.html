@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Operativo • Alertas</title>
+
+    <!-- Estilos base del proyecto -->
+    <link rel="stylesheet" href="./css/styles.css" />
+    <link rel="stylesheet" href="./css/operativo.css" />
+    <link rel="stylesheet" href="./css/dashboard_patch.css" />
+
+    <style>
+      /* Chips de colores */
+      .alert-chip {
+        width: 14px;
+        height: 14px;
+        border-radius: 999px;
+        display: inline-block;
+        vertical-align: middle;
+        margin-right: 6px;
+      }
+      .alert-azul {
+        background: #1e90ff;
+      }
+      .alert-verde {
+        background: #16a34a;
+      }
+      .alert-amarillo {
+        background: #eab308;
+      }
+      .alert-rojo {
+        background: #ef4444;
+      }
+
+      /* --- Modal SIGMA (nombres únicos) --- */
+      .sigma-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.4);
+        display: none; /* se activa con .open o style.display='flex' */
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+      }
+      .sigma-modal-backdrop.open,
+      .sigma-modal-backdrop[style*="display: flex"] {
+        display: flex;
+      }
+
+      .sigma-modal {
+        display: block !important; /* evita choques con frameworks */
+        background: #fff;
+        border-radius: 14px;
+        max-width: 980px;
+        width: 96%;
+        padding: 20px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.22);
+      }
+
+      .sigma-modal .modal-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+      .sigma-modal .full {
+        grid-column: 1/-1;
+      }
+      .sigma-modal .title {
+        font-weight: 800;
+        font-size: 18px;
+      }
+      .sigma-modal .subtitle {
+        font-size: 13px;
+        color: #6b7280;
+      }
+      .value {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        padding: 10px 12px;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+      }
+      @media (max-width: 900px) {
+        .sigma-modal .modal-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      /* Header modal con botón cerrar a la derecha */
+      .modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+      }
+      .close-btn {
+        background: transparent;
+        border: none;
+        font-size: 20px;
+        cursor: pointer;
+        line-height: 1;
+      }
+
+      /* Botones de reporte */
+      .report-btn {
+        margin-top: 6px;
+        padding: 6px 12px;
+        font-size: 14px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .report-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <!-- Sidebar (se inyecta aquí por JS) -->
+      <div id="sidebar-container"></div>
+
+      <!-- Main -->
+      <main class="main">
+        <!-- Topbar (se inyecta al inicio de .main por JS) -->
+
+        <div class="page">
+          <h2>ALERTAS</h2>
+
+          <!-- Toolbar -->
+          <div class="toolbar">
+            <button class="btn" id="btnFilter">Filtrar</button>
+          </div>
+
+          <!-- Panel de filtros -->
+          <div
+            id="filters"
+            class="card"
+            style="display: none; margin-bottom: 12px"
+          >
+            <div class="grid cols-3">
+              <div>
+                <div class="section-title">Pozo</div>
+                <select id="fWell" class="input">
+                  <option value="">Todos</option>
+                </select>
+              </div>
+              <div>
+                <div class="section-title">Alerta</div>
+                <select id="fAlert" class="input">
+                  <option value="">Todas</option>
+                  <option value="amarillo">Amarillo</option>
+                  <option value="rojo">Rojo</option>
+                </select>
+              </div>
+              <div></div>
+            </div>
+            <div
+              class="toolbar"
+              style="justify-content: flex-start; margin-top: 8px"
+            >
+              <button class="btn" id="fClear">Limpiar</button>
+              <button class="btn primary" id="fApply">Aplicar</button>
+            </div>
+          </div>
+
+          <!-- Tabla de alertas -->
+          <table class="table">
+            <thead>
+              <tr>
+                <th>POZO</th>
+                <th>Material</th>
+                <th>Alerta</th>
+                <th>Comentario</th>
+                <th style="width: 80px">Acción</th>
+              </tr>
+            </thead>
+            <tbody id="alertsBody"></tbody>
+          </table>
+
+          <!-- Modal Detalle -->
+          <div id="alertModal" class="sigma-modal-backdrop">
+            <div class="sigma-modal">
+              <header class="modal-header">
+                <div>
+                  <div class="title">INFORMACIÓN MATERIAL</div>
+                  <div class="subtitle" id="modalSubtitle"></div>
+                </div>
+                <button class="close-btn" id="closeModal" aria-label="Cerrar">
+                  ✖
+                </button>
+              </header>
+
+              <div class="modal-grid">
+                <div>
+                  <div class="section-title">PROGRAMA</div>
+                  <div class="value" id="dPrograma">-</div>
+                </div>
+                <div>
+                  <div class="section-title">CATEGORÍA</div>
+                  <div class="value" id="dCategoria">-</div>
+                </div>
+
+                <div class="full">
+                  <div class="section-title">ESPECIFICACIÓN</div>
+                  <div class="value" id="dEspecificacion">-</div>
+                </div>
+
+                <div>
+                  <div class="section-title">CANTIDAD</div>
+                  <div class="value" id="dCantidad">-</div>
+                </div>
+                <div>
+                  <div class="section-title">UNIDAD</div>
+                  <div class="value" id="dUnidad">-</div>
+                </div>
+
+                <div>
+                  <div class="section-title">PROVEEDOR</div>
+                  <div class="value" id="dProveedor">-</div>
+                </div>
+                <div>
+                  <div class="section-title">ORDEN DE SERVICIO</div>
+                  <div class="value" id="dOS">-</div>
+                </div>
+
+                <!-- Avanzada + botón Reporte -->
+                <div>
+                  <div class="section-title">FECHA AVANZADA</div>
+                  <div class="value" id="dAvanzada">-</div>
+                  <button id="btnAvanzada" class="btn report-btn" disabled>
+                    📑 Reporte
+                  </button>
+                </div>
+
+                <!-- Inspección + botón Reporte -->
+                <div>
+                  <div class="section-title">FECHA INSPECCIÓN</div>
+                  <div class="value" id="dInspeccion">-</div>
+                  <button id="btnInspeccion" class="btn report-btn" disabled>
+                    📑 Reporte
+                  </button>
+                </div>
+
+                <div>
+                  <div class="section-title">LOGÍSTICA</div>
+                  <div class="value" id="dLogistica">-</div>
+                </div>
+                <div>
+                  <div class="section-title">ALERTA</div>
+                  <div class="value" id="dAlerta">-</div>
+                </div>
+
+                <div class="full">
+                  <div class="section-title">COMENTARIO</div>
+                  <div class="value" id="dComentario">-</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- /Modal -->
+        </div>
+        <!-- /.page -->
+      </main>
+    </div>
+
+    <!-- JS externos (sin inline, cumplen CSP) -->
+    <script src="./js/dashboard.js"></script>
+    <script type="module" src="./js/init_alertas_partials.js"></script>
+    <script type="module" src="./js/operativo_alertas.js"></script>
+  </body>
+</html>
