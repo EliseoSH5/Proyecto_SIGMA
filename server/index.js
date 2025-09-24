@@ -124,10 +124,7 @@ app.use(express.static(PUBLIC_DIR));
 app.get('*', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'index.html')));
 
 // ====== Seeder opcional (crea usuario si no existe) ======
-async function seed() {
-  const email = 'eliseo@example.com';
-  const full = 'Eliseo Salinas';
-  const pass = '123456';
+async function seed(email, full, pass) {
   const hash = await bcrypt.hash(pass, 10);
   await pool.query(
     `INSERT INTO users (full_name, email, password_hash)
@@ -140,7 +137,11 @@ async function seed() {
 
 const PORT = Number(process.env.PORT || 3000);
 if (process.argv[2] === 'seed') {
-  seed().then(() => process.exit(0));
+  console.log(process.argv)
+  const email = process.argv[3];
+  const full = process.argv[4];
+  const pass = process.argv[5];
+  seed(email, full, pass).then(() => process.exit(0));
 } else {
   app.listen(PORT, () => console.log(`SIGMA server en http://localhost:${PORT}`));
 }
