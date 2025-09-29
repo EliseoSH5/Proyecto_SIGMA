@@ -32,3 +32,22 @@ btn?.addEventListener('click', async () => {
     alert('Error de conexión con el servidor');
   }
 });
+
+document.addEventListener("DOMContentLoaded", () => {
+  const btnLogout = document.getElementById("btnLogout");
+  if (btnLogout) {
+    btnLogout.addEventListener("click", (e) => {
+      e.preventDefault();
+
+      // 1. Limpiar datos de usuario
+      localStorage.removeItem("sigma_user");
+      sessionStorage.clear();
+
+      // 2. (Opcional) avisar al backend si llevas tokens de sesión
+      // fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+
+      // 3. Redirigir al login
+      window.location.href = "login.html";
+    });
+  }
+});

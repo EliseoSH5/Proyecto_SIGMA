@@ -14,20 +14,21 @@
   --good: #23c483;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
   --radius: 18px;
-  --sidebar-bg: #111315;   /* mismo tono oscuro del sidebar */
-  --topbar-bg:  #0e1013;   /* mismo tono oscuro de la barra superior */
-  --topbar-br:  #1f2937;   /* línea separadora sutil */
-  --page-bg:    #ffffff;   /* FONDO BLANCO para el contenido principal */
+  --sidebar-bg: #111315; /* mismo tono oscuro del sidebar */
+  --topbar-bg: #0e1013; /* mismo tono oscuro de la barra superior */
+  --topbar-br: #1f2937; /* línea separadora sutil */
+  --page-bg: #ffffff; /* FONDO BLANCO para el contenido principal */
 }
 
-
 /* Fondo blanco en el área de trabajo */
-body, .app, .main {
+body,
+.app,
+.main {
   background: var(--page-bg) !important;
 }
 
 body.page-index {
-  --page-bg: #0B0B0B;
+  --page-bg: #0b0b0b;
 }
 
 /* Sidebar conserva su look oscuro */
@@ -38,13 +39,14 @@ body.page-index {
 
 /* Topbar conserva su look oscuro */
 .topbar {
-  background: #F2BF7C !important;
+  background: #f2bf7c !important;
   color: #fff;
   border-bottom: 1px solid var(--topbar-br);
 }
 
 /* Cards y tablas ya eran blancas; garantizamos contraste y sombras suaves */
-.card, .table {
+.card,
+.table {
   background: #fff;
 }
 
@@ -54,13 +56,14 @@ body.page-index {
 }
 
 /* Links en topbar/sidebar legibles en fondo oscuro */
-.sidebar a, .topbar a {
+.sidebar a,
+.topbar a {
   color: #e5e7eb;
 }
-.sidebar a:hover, .topbar a:hover {
+.sidebar a:hover,
+.topbar a:hover {
   color: #fff;
 }
-
 
 * {
   box-sizing: border-box;
@@ -138,7 +141,6 @@ body {
   max-width: 1200px;
   margin: 32px auto;
   padding: 40px 24px 72px;
-  
 }
 .hero h1 {
   font-size: 56px; /* tamaño de título */
@@ -318,6 +320,29 @@ button.primary:hover {
   background: #22262d;
   color: #fff;
 }
+
+.item-log {
+  color: #e7e9ed;
+  padding: 10px 12px;
+  border:1px dashed #3a2a2a;
+  border-radius: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.item-log:hover {
+  background: #c93c3c;
+}
+.item-log.active {
+  background: #22262d;
+  color: #fff;
+}
+ .logout-link{
+  text-decoration: none;
+ }
+
 .sub {
   display: none;
   padding-left: 8px;
@@ -365,7 +390,6 @@ button.primary:hover {
   align-items: center;
   gap: 10px;
   padding: 6px 10px;
-
 }
 .avatar-badge {
   width: 36px;
@@ -380,30 +404,21 @@ button.primary:hover {
 .content {
   padding: 24px;
 }
-.logout {
-  margin-top: auto;
-  padding: 10px 12px;
-  color: #ffdddd;
-  border: 1px dashed #3a2a2a;
-  border-radius: 10px;
-  cursor: pointer;
-}
-.logout:hover {
-  background: #1a1212;
-}
+
+
 .small {
   font-size: 12px;
   color: #111;
   opacity: 0.8;
 }
 
-  #nav-toggle {
-    position: absolute;
-    opacity: 0;
-    width: 0;
-    height: 0;
-    pointer-events: none;
-  }
+#nav-toggle {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
 
 /* =========================================================
    Responsive
@@ -440,7 +455,6 @@ button.primary:hover {
      <label class="hamb" for="nav-toggle">...</label>
      <div class="links">...</div>
   */
-
 
   .hamb {
     display: inline-flex;
