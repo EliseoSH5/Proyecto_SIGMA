@@ -25,7 +25,7 @@ async function hydrate() {
   document.getElementById("fechaInspeccion").value =
     m.fecha_inspeccion?.slice(0, 10) || "";
   document.getElementById("linkInspeccion").value = m.link_inspeccion || "";
-  document.getElementById("logistica").value = m.logistica || "En transito";
+  document.getElementById("logistica").value = m.logistica || "Por Definir";
   document.getElementById('alerta').value = (m.alerta || 'azul');
 
 }
@@ -61,3 +61,59 @@ btnSave.addEventListener("click", async () => {
   }
   window.location.href = `./operativo_materiales.html?stage=${stageId}`;
 });
+
+// ===== Exportar Planeación Operativa a Excel =====
+(function attachExportHandler() {
+  const btn = document.getElementById("btnExportXlsx");
+  if (!btn) return; // si no está en esta vista, no hace nada
+
+  // Toma filtros si existen en la página (no son obligatorios)
+  const $ = (id) => document.getElementById(id);
+  const fWell  = $("fWell");   // <select> Pozo (opcional)
+  const fStage = $("fStage");  // <select> Etapa (opcional)
+  const fAlert = $("fAlert");  // <select> Alerta (opcional)
+
+  btn.addEventListener("click", async () => {
+    try {
+      btn.disabled = true;
+      btn.textContent = "Generando…";
+
+      const qs = new URLSearchParams();
+      if (fWell?.value)  qs.set("well",  fWell.value);
+      if (fStage?.value) qs.set("stage", fStage.value);
+      if (fAlert?.value) qs.set("alerta", fAlert.value);
+
+      const url = `/api/operativo/planeacion/export${qs.toString() ? `?${qs.toString()}` : ""}`;
+      const resp = await fetch(url, { method: "GET" });
+
+      if (!resp.ok) {
+        let msg = `Error ${resp.status}`;
+        try {
+          const j = await resp.json();
+          if (j?.error) msg = j.error;
+        } catch {}
+        throw new Error(msg);
+      }
+
+      const blob = await resp.blob();
+      const a = document.createElement("a");
+      const href = URL.createObjectURL(blob);
+      const stamp = new Date().toISOString().slice(0,10);
+      a.href = href;
+      a.download = `planeacion_operativa_${stamp}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(href);
+
+      // opcional: toast si tienes uno global
+      window.toastOk?.("Excel descargado");
+    } catch (e) {
+      console.error(e);
+      window.toastError?.(e.message || "No se pudo descargar el Excel") || alert(e.message || "No se pudo descargar el Excel");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Descargar Excel";
+    }
+  });
+})();

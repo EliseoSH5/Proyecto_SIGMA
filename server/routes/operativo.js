@@ -2,11 +2,23 @@
 import express from "express";
 const router = express.Router();
 
+import buildOperativoExport from "./routes/operativo_export.js";
+app.use("/api/operativo", buildOperativoExport(pool));
+
 // ---- helper: castear seguro a entero (o null)
 function toInt(v, fallback = null) {
   if (v === null || v === undefined || v === "") return fallback;
   const n = Number.parseInt(v, 10);
   return Number.isFinite(n) ? n : fallback;
+}
+
+// ---- helper: validar arreglo de enteros ÚNICOS
+function intsUnique(arr) {
+  if (!Array.isArray(arr) || arr.length === 0) return false;
+  for (const v of arr) {
+    if (!Number.isInteger(Number(v))) return false;
+  }
+  return new Set(arr.map(Number)).size === arr.length;
 }
 
 /**
@@ -255,20 +267,18 @@ export default function buildOperativoRoutes(pool) {
     }
   });
 
-  // PUT /stages/:id  (edición rápida de datos de etapa)
+  // PUT /stages/:id  (edición de etapa SIN cambiar order_index aquí)
   router.put("/stages/:id", async (req, res) => {
     try {
       const id = Number(req.params.id);
-      const { stage_name, pipe, progress, position, order_index } = req.body || {};
-      const desiredOrder = toInt(position ?? order_index, null);
+      const { stage_name, pipe, progress } = req.body || {};
       await pool.query(
         `UPDATE public.well_stages
             SET stage_name = COALESCE($1, stage_name),
                 pipe       = COALESCE($2, pipe),
-                progress   = COALESCE($3, progress),
-                order_index= COALESCE($4::int, order_index)
-          WHERE id = $5`,
-        [stage_name, pipe, progress, desiredOrder, id]
+                progress   = COALESCE($3, progress)
+          WHERE id = $4`,
+        [stage_name, pipe, progress, id]
       );
       res.json({ ok: true });
     } catch (e) {
@@ -290,32 +300,62 @@ export default function buildOperativoRoutes(pool) {
     }
   });
 
-  // POST /wells/:id/stages/reorder  (guardar orden por lista de IDs)
-  router.post("/wells/:id/stages/reorder", async (req, res) => {
-    const wellId = Number(req.params.id);
-    const { order } = req.body || {};
-    if (!Array.isArray(order) || !order.length) {
-      return res.status(400).json({ ok: false, error: "order requerido" });
+// POST /wells/:id/stages/reorder  (transacción + UNIQUE DEFERRABLE, usando UNNEST tipado)
+router.post("/wells/:id/stages/reorder", async (req, res) => {
+  const wellId = Number(req.params.id);
+  const { order } = req.body || {};
+
+  if (!Number.isInteger(wellId)) {
+    return res.status(400).json({ ok: false, error: "wellId inválido" });
+  }
+  if (!intsUnique(order)) {
+    return res.status(400).json({ ok: false, error: "order debe ser arreglo de enteros únicos" });
+  }
+
+  const ids = order.map(n => Number(n)); // asegurar enteros
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // Diferir la UNIQUE (requiere restricción DEFERRABLE)
+    await client.query("SET CONSTRAINTS uq_stage_order_per_well DEFERRED");
+
+    // Bloquear filas del pozo
+    await client.query(
+      `SELECT id FROM public.well_stages WHERE well_id = $1 FOR UPDATE`,
+      [wellId]
+    );
+
+    // Usar UNNEST con WITH ORDINALITY para mapear [id] -> índice 1..N
+    const upd = await client.query(
+      `
+      UPDATE public.well_stages AS ws
+         SET order_index = v.new_index
+        FROM (
+          SELECT t.id::int, t.ord::int AS new_index
+          FROM unnest($2::int[]) WITH ORDINALITY AS t(id, ord)
+        ) AS v
+       WHERE ws.id = v.id
+         AND ws.well_id = $1
+      `,
+      [wellId, ids]
+    );
+
+    if (upd.rowCount !== ids.length) {
+      throw new Error("Algunos IDs no pertenecen al pozo o no existen");
     }
-    const client = await pool.connect();
-    try {
-      await client.query("BEGIN");
-      for (let i = 0; i < order.length; i++) {
-        const stageId = Number(order[i]);
-        await client.query(
-          "UPDATE public.well_stages SET order_index = $1 WHERE id = $2 AND well_id = $3",
-          [i + 1, stageId, wellId]
-        );
-      }
-      await client.query("COMMIT");
-      res.json({ ok: true });
-    } catch (e) {
-      await client.query("ROLLBACK");
-      res.status(500).json({ ok: false, error: e.message });
-    } finally {
-      client.release();
-    }
-  });
+
+    await client.query("COMMIT");
+    return res.json({ ok: true });
+  } catch (e) {
+    await client.query("ROLLBACK");
+    console.error("reorder error:", e);
+    return res.status(500).json({ ok: false, error: e.message || "No se pudo reordenar" });
+  } finally {
+    client.release();
+  }
+});
 
   // =========================
   //        MATERIALS
@@ -375,7 +415,7 @@ export default function buildOperativoRoutes(pool) {
         "SELECT * FROM public.materials WHERE id = $1",
         [id]
       );
-      if (!r.rows.length)
+    if (!r.rows.length)
         return res.status(404).json({ ok: false, error: "No encontrado" });
       res.json({ ok: true, data: r.rows[0] });
     } catch (e) {
@@ -499,58 +539,74 @@ export default function buildOperativoRoutes(pool) {
   //          ALERTAS
   // =========================
 
-  // GET /alerts -> lista de materiales con alerta 'amarillo' o 'rojo', filtros opcionales
-  router.get("/alerts", async (req, res) => {
-    try {
-      const { well = "", alerta = "" } = req.query;
+// GET /alerts -> lista de materiales con cualquier alerta (azul/verde/amarillo/rojo)
+// Filtros opcionales: ?well=ID&stage=ID&alerta=azul|verde|amarillo|rojo
+router.get("/alerts", async (req, res) => {
+  try {
+    const { well = "", stage = "", alerta = "" } = req.query;
 
-      // Si 'alerta' es ENUM en tu DB (public.alert_type), deja estos casts.
-      // Si es TEXT/VARCHAR, quita ::public.alert_type en los WHERE.
-      const where = [
-        `(m.alerta = 'amarillo'::public.alert_type OR m.alerta = 'rojo'::public.alert_type)`,
-      ];
-      const params = [];
+    const where = ["1=1"];
+    const params = [];
 
-      if (well) {
-        params.push(Number(well));
-        where.push(`w.id = $${params.length}`);
-      }
-      if (alerta && ["amarillo", "rojo"].includes(String(alerta).toLowerCase())) {
-        params.push(String(alerta).toLowerCase());
-        where.push(`m.alerta = $${params.length}::public.alert_type`);
-      }
-
-      const sql = `
-        SELECT 
-          m.id                                     AS material_id,
-          w.id                                     AS well_id,
-          w.name                                   AS well_name,
-          COALESCE(m.material_name, m.categoria)   AS material,
-          m.alerta,
-          m.comentario
-        FROM public.materials m
-        JOIN public.well_stages s ON s.id = m.stage_id
-        JOIN public.wells w       ON w.id = s.well_id
-        WHERE ${where.join(" AND ")}
-        ORDER BY CASE m.alerta WHEN 'rojo'::public.alert_type THEN 0 ELSE 1 END,
-                 w.name ASC, m.id ASC
-      `;
-      const r = await pool.query(sql, params);
-
-      const rw = await pool.query(`
-        SELECT DISTINCT w.id, w.name
-        FROM public.materials m
-        JOIN public.well_stages s ON s.id = m.stage_id
-        JOIN public.wells w       ON w.id = s.well_id
-        WHERE m.alerta IN ('amarillo'::public.alert_type,'rojo'::public.alert_type)
-        ORDER BY w.name ASC
-      `);
-
-      res.json({ ok: true, data: r.rows, wells: rw.rows });
-    } catch (e) {
-      res.status(500).json({ ok: false, error: e.message });
+    // Filtros opcionales
+    if (well) {
+      params.push(Number(well));
+      where.push(`w.id = $${params.length}`);
     }
-  });
+    if (stage) {
+      params.push(Number(stage));
+      where.push(`s.id = $${params.length}`);
+    }
+    if (alerta && ["azul", "verde", "amarillo", "rojo"].includes(String(alerta).toLowerCase())) {
+      params.push(String(alerta).toLowerCase());
+      where.push(`m.alerta = $${params.length}::public.alert_type`);
+    }
+
+    // Orden por severidad (rojo > amarillo > verde > azul), luego pozo/etapa
+    const sql = `
+      SELECT 
+        m.id                                   AS material_id,
+        w.id                                   AS well_id,
+        w.name                                 AS well_name,
+        s.id                                   AS stage_id,
+        COALESCE(s.stage_name, CONCAT('Etapa #', s.order_index)) AS stage_name,
+        COALESCE(m.material_name, m.categoria) AS material,
+        m.alerta,
+        m.comentario
+      FROM public.materials m
+      JOIN public.well_stages s ON s.id = m.stage_id
+      JOIN public.wells w       ON w.id = s.well_id
+      WHERE ${where.join(" AND ")}
+      ORDER BY CASE m.alerta
+                 WHEN 'rojo'::public.alert_type      THEN 0
+                 WHEN 'amarillo'::public.alert_type  THEN 1
+                 WHEN 'verde'::public.alert_type     THEN 2
+                 ELSE 3
+               END,
+               w.name ASC,
+               s.order_index ASC,
+               m.id ASC
+    `;
+    const r = await pool.query(sql, params);
+
+    // Para dropdowns en el cliente
+    const wells = await pool.query(`
+      SELECT w.id, w.name
+      FROM public.wells w
+      ORDER BY w.name ASC
+    `);
+
+    res.json({
+      ok: true,
+      data: r.rows,
+      wells: wells.rows,
+      // hint para UI (rutas de edición existentes)
+      edit: { api: "/api/operativo/materials/:id", method: "PUT" }
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
 
   return router;
 }

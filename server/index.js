@@ -7,6 +7,10 @@ import bcrypt from 'bcrypt';
 import { Pool } from 'pg';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import buildOperativoExport from "./routes/operativo_export.js";
+
+
+
 
 dotenv.config();
 const app = express();
@@ -106,6 +110,7 @@ app.use((req,res,next)=>{
 // server/index.js
 import buildOperativoRoutes from './routes/operativo.js';
 app.use('/api/operativo', authMiddleware, buildOperativoRoutes(pool));
+app.use("/api/operativo", buildOperativoExport(pool));
 
 app.get('/operativo_matriz.html', authMiddleware, (_req,res)=>res.sendFile(path.join(PUBLIC_DIR,'operativo_matriz.html')));
 app.get('/operativo_pozo_form.html', authMiddleware, (_req,res)=>res.sendFile(path.join(PUBLIC_DIR,'operativo_pozo_form.html')));

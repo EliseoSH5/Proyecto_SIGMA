@@ -1,13 +1,18 @@
 // public/js/operativo_alertas.js
-// Alertas: lista materiales (amarillo/rojo) + filtros y modal de detalle con botones de reporte
+// Alertas: lista de materiales (todas las alertas) + filtros (Pozo, Etapa[dedup por nombre], Alerta)
+// + modal de detalle + botón Editar -> INFO MATERIAL + cierre de modal robusto
 
 import { api } from "./operativo_shared.js";
+
+// === Configura aquí la página de edición del material ===
+const MATERIAL_INFO_PAGE = "/operativo_materiales.html";
 
 // --- refs (tolerantes a null) ---
 const btnFilter = document.getElementById("btnFilter");
 const panel = document.getElementById("filters");
 
-const fWell = document.getElementById("fWell");
+const fWell  = document.getElementById("fWell");
+const fStage = document.getElementById("fStage"); // siempre habilitado
 const fAlert = document.getElementById("fAlert");
 
 const fClear = document.getElementById("fClear");
@@ -17,7 +22,7 @@ const body = document.getElementById("alertsBody");
 
 // Modal (IDs/clases nuevas)
 const modal = document.getElementById("alertModal"); // sigma-modal-backdrop
-const closeModal = document.getElementById("closeModal");
+const closeModalBtn = document.getElementById("closeModal"); // puede existir o no
 const modalSubtitle = document.getElementById("modalSubtitle");
 const dPrograma = document.getElementById("dPrograma");
 const dCategoria = document.getElementById("dCategoria");
@@ -37,27 +42,51 @@ const btnAvanzada = document.getElementById("btnAvanzada");
 const btnInspeccion = document.getElementById("btnInspeccion");
 
 // --- helpers ---
+const ALERT_LEVELS = ["azul", "verde", "amarillo", "rojo"];
+
 const fmtDate = (d) => {
   if (!d) return "-";
   const date = new Date(d);
   return isNaN(date)
     ? d
-    : date.toLocaleDateString("es-MX", {
-        year: "2-digit",
-        month: "2-digit",
-        day: "2-digit",
-      });
+    : date.toLocaleDateString("es-MX", { year: "2-digit", month: "2-digit", day: "2-digit" });
 };
-const dot = (val) =>
-  `<span class="alert-chip ${
-    val === "rojo" ? "alert-rojo" : "alert-amarillo"
-  }"></span>`;
 
-// Apertura/cierre del modal (clase .open + fallback a style.display)
+function chipClass(alerta) {
+  const a = String(alerta || "").toLowerCase();
+  return {
+    rojo: "alert-rojo",
+    amarillo: "alert-amarillo",
+    verde: "alert-verde",
+    azul: "alert-azul",
+  }[a] || "alert-azul";
+}
+
+const dot = (val) =>
+  `<span class="alert-chip ${chipClass(val)}"></span> ${String(val || "-").toLowerCase()}`;
+
+// Normaliza textos para clave de deduplicación (etapas)
+function norm(s) {
+  return String(s ?? "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
+// Navegar a la pantalla "INFORMACIÓN MATERIAL" con material + stage
+function goToMaterialInfo({ material_id, stage_id }) {
+  const url = new URL(MATERIAL_INFO_PAGE, window.location.origin);
+  url.searchParams.set("material", String(material_id)); // material a editar
+  if (stage_id) url.searchParams.set("stage", String(stage_id));
+  url.searchParams.set("action", "edit");
+  window.location.href = url.toString();
+}
+
+// Apertura/cierre del modal
 function safeOpenModal() {
   if (!modal) return;
-  modal.classList.add("open"); // .sigma-modal-backdrop.open { display:flex; ... }
-  modal.style.display = "flex"; // fallback por si falta la regla CSS
+  modal.classList.add("open");
+  modal.style.display = "flex";
 }
 function safeCloseModal() {
   if (!modal) return;
@@ -65,21 +94,42 @@ function safeCloseModal() {
   modal.style.display = "none";
 }
 
-// --- tabla ---
-function row(it) {
-  const tr = document.createElement("tr");
-  tr.innerHTML = `
-    <td>${it.well_name}</td>
-    <td>${it.material || "-"}</td>
-    <td>${dot(it.alerta)}</td>
-    <td>${it.comentario || ""}</td>
-    <td class="actions"><a title="Ver" data-action="view">👁️</a></td>
-  `;
-  tr.querySelector('[data-action="view"]')?.addEventListener("click", () =>
-    openDetail(it.material_id)
+// ------ cerrar modal (robusto con delegación) ------
+function isCloseTarget(el) {
+  if (!el) return false;
+  return (
+    el.id === "closeModal" ||
+    (typeof el.hasAttribute === "function" && el.hasAttribute("data-close")) ||
+    (typeof el.getAttribute === "function" && el.getAttribute("data-action") === "close") ||
+    (el.classList && el.classList.contains("js-close-modal"))
   );
-  return tr;
 }
+
+// cierra al click en backdrop o en cualquier elemento marcado para cerrar
+modal?.addEventListener("click", (e) => {
+  // 1) click directo en backdrop
+  if (e.target === modal) {
+    safeCloseModal();
+    return;
+  }
+  // 2) click en X o cualquier descendiente con data-close / js-close-modal / data-action="close" / #closeModal
+  const candidate = e.target?.closest?.("[data-close], .js-close-modal, [data-action='close'], #closeModal");
+  if (isCloseTarget(e.target) || candidate) {
+    e.preventDefault();
+    safeCloseModal();
+  }
+});
+
+// sigue sirviendo si tienes un botón concreto con id="closeModal"
+closeModalBtn?.addEventListener("click", (e) => {
+  e.preventDefault();
+  safeCloseModal();
+});
+
+// cierra con ESC
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") safeCloseModal();
+});
 
 // --- modal detalle ---
 async function openDetail(id) {
@@ -91,10 +141,7 @@ async function openDetail(id) {
   }
   const m = r.data || {};
 
-  if (modalSubtitle)
-    modalSubtitle.textContent = `${m.categoria || "Material"} • Proveedor: ${
-      m.proveedor || "-"
-    }`;
+  if (modalSubtitle) modalSubtitle.textContent = `${m.categoria || "Material"} • Proveedor: ${m.proveedor || "-"}`;
   if (dPrograma) dPrograma.textContent = m.programa || "-";
   if (dCategoria) dCategoria.textContent = m.categoria || "-";
   if (dEspecificacion) dEspecificacion.textContent = m.especificacion || "-";
@@ -109,36 +156,30 @@ async function openDetail(id) {
   if (dLogistica) dLogistica.textContent = m.logistica || "-";
 
   if (dAlerta) {
+    const a = (m.alerta || "").toLowerCase();
     dAlerta.innerHTML =
-      m.alerta === "rojo"
-        ? '<span class="alert-chip alert-rojo"></span> Rojo'
-        : m.alerta === "amarillo"
-        ? '<span class="alert-chip alert-amarillo"></span> Amarillo'
-        : m.alerta === "verde"
-        ? '<span class="alert-chip alert-verde"></span> Verde'
-        : '<span class="alert-chip alert-azul"></span> Azul';
+      a === "rojo" ? '<span class="alert-chip alert-rojo"></span> Rojo' :
+      a === "amarillo" ? '<span class="alert-chip alert-amarillo"></span> Amarillo' :
+      a === "verde" ? '<span class="alert-chip alert-verde"></span> Verde' :
+      '<span class="alert-chip alert-azul"></span> Azul';
   }
 
   if (dComentario) dComentario.textContent = m.comentario || "";
 
-  // Botón Reporte Avanzada
   if (btnAvanzada) {
     if (m.link_avanzada) {
       btnAvanzada.disabled = false;
-      btnAvanzada.onclick = () =>
-        window.open(m.link_avanzada, "_blank", "noopener");
+      btnAvanzada.onclick = () => window.open(m.link_avanzada, "_blank", "noopener");
     } else {
       btnAvanzada.disabled = true;
       btnAvanzada.onclick = null;
     }
   }
 
-  // Botón Reporte Inspección
   if (btnInspeccion) {
     if (m.link_inspeccion) {
       btnInspeccion.disabled = false;
-      btnInspeccion.onclick = () =>
-        window.open(m.link_inspeccion, "_blank", "noopener");
+      btnInspeccion.onclick = () => window.open(m.link_inspeccion, "_blank", "noopener");
     } else {
       btnInspeccion.disabled = true;
       btnInspeccion.onclick = null;
@@ -148,57 +189,109 @@ async function openDetail(id) {
   safeOpenModal();
 }
 
-// cerrar modal
-closeModal?.addEventListener("click", safeCloseModal);
-modal?.addEventListener("click", (e) => {
-  if (e.target === modal) safeCloseModal();
-});
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") safeCloseModal();
-});
+// --- fila de tabla ---
+function row(it) {
+  const tr = document.createElement("tr");
+  tr.innerHTML = `
+    <td>${it.well_name}</td>
+    <td>${it.stage_name}</td>
+    <td>${it.material || "-"}</td>
+    <td>${dot(it.alerta)}</td>
+    <td>${it.comentario || ""}</td>
+    <td class="actions">
+      <a title="Ver" data-action="view">👁️</a>
+      <a title="Editar" data-action="edit" class="ml-2">✏️</a>
+    </td>
+  `;
+  tr.querySelector('[data-action="view"]')?.addEventListener("click", () => openDetail(it.material_id));
+  tr.querySelector('[data-action="edit"]')?.addEventListener("click", () => goToMaterialInfo(it));
+  return tr;
+}
 
-// --- filtros ---
+// --- construir opciones de ETAPAS deduplicadas por NOMBRE ---
+// Devuelve pares [key,label] donde key = nombre normalizado, label = primer nombre visto
+function buildUniqueStageNames(rows) {
+  const seen = new Map(); // key -> label
+  for (const r of rows || []) {
+    const label = r.stage_name || "Etapa";
+    const key = norm(label);
+    if (!seen.has(key)) seen.set(key, label);
+  }
+  // Mantener orden de aparición
+  return Array.from(seen.entries()); // [[key,label], ...]
+}
+
+// --- filtros UI ---
 btnFilter?.addEventListener("click", () => {
   if (!panel) return;
   panel.style.display = panel.style.display === "none" ? "block" : "none";
 });
-fClear?.addEventListener("click", () => {
-  if (fWell) fWell.value = "";
+
+fClear?.addEventListener("click", async () => {
+  if (fWell)  fWell.value = "";
+  if (fStage) fStage.value = "";
   if (fAlert) fAlert.value = "";
+  await load();
 });
+
 fApply?.addEventListener("click", () => load());
 
-// --- data ---
-async function load() {
-  const params = new URLSearchParams();
-  if (fWell?.value) params.set("well", fWell.value);
-  if (fAlert?.value) params.set("alerta", fAlert.value);
+// (Opcional) refrescar en vivo al cambiar otros selects:
+// fWell?.addEventListener("change", () => { fStage.value = ""; load(); });
+// fAlert?.addEventListener("change", () => { load(); });
 
-  const r = await api.get(
-    "/api/operativo/alerts" + (params.toString() ? `?${params.toString()}` : "")
-  );
+// --- carga principal ---
+// 1) Pide /alerts con filtros de Pozo/Alerta (SIN stage) para obtener el universo.
+// 2) Construye combo Etapas por NOMBRE (dedup) a partir de ese universo.
+// 3) Aplica filtro de Etapa por NOMBRE en cliente y renderiza.
+async function load() {
+  const paramsForFetch = new URLSearchParams();
+  if (fWell?.value)  paramsForFetch.set("well",  fWell.value);
+  if (fAlert?.value) paramsForFetch.set("alerta", fAlert.value);
+
+  const r = await api.get("/api/operativo/alerts" + (paramsForFetch.toString() ? `?${paramsForFetch.toString()}` : ""));
   if (!r.ok) {
     console.error("Alerts error:", r.error);
     alert(r.error || "Error cargando alertas");
-    body.innerHTML = `<tr><td colspan="5" class="muted">Sin alertas amarillas/rojas</td></tr>`;
+    body.innerHTML = `<tr><td colspan="6" class="muted">Sin alertas</td></tr>`;
     return;
   }
 
-  // poblar select pozos (si viene)
+  // Poblar Pozo
   if (Array.isArray(r.wells) && fWell) {
-    const current = fWell.value;
-    fWell.innerHTML =
-      `<option value="">Todos</option>` +
-      r.wells.map((w) => `<option value="${w.id}">${w.name}</option>`).join("");
-    fWell.value = current;
+    const currentWell = fWell.value;
+    fWell.innerHTML = `<option value="">Todos</option>` + r.wells.map((w) => `<option value="${w.id}">${w.name}</option>`).join("");
+    fWell.value = currentWell;
   }
 
+  // Construir Etapas deduplicadas por NOMBRE desde dataset (solo las que aparecen)
+  const currentStageKey = fStage?.value || "";
+  const stagePairs = buildUniqueStageNames(r.data); // [[key,label], ...]
+  if (fStage) {
+    fStage.innerHTML = `<option value="">Todas</option>` +
+      stagePairs.map(([key, label]) => `<option value="${key}">${label}</option>`).join("");
+    // Restaurar selección si aún existe, si no limpiar
+    if (currentStageKey && stagePairs.some(([key]) => key === currentStageKey)) {
+      fStage.value = currentStageKey;
+    } else {
+      fStage.value = "";
+    }
+  }
+
+  // Filtrar por etapa (por NOMBRE normalizado) en cliente
+  let rowsToRender = Array.isArray(r.data) ? r.data : [];
+  if (fStage?.value) {
+    const key = fStage.value;
+    rowsToRender = rowsToRender.filter(it => norm(it.stage_name || "Etapa") === key);
+  }
+
+  // Render
   body.innerHTML = "";
-  if (!Array.isArray(r.data) || r.data.length === 0) {
-    body.innerHTML = `<tr><td colspan="5" class="muted">Sin alertas amarillas/rojas</td></tr>`;
+  if (!rowsToRender.length) {
+    body.innerHTML = `<tr><td colspan="6" class="muted">Sin alertas</td></tr>`;
     return;
   }
-  r.data.forEach((it) => body.appendChild(row(it)));
+  rowsToRender.forEach((it) => body.appendChild(row(it)));
 }
 
 // primera carga
