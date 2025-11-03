@@ -298,36 +298,36 @@ export default function buildOperativoRoutes(pool) {
     }
   });
 
-// POST /wells/:id/stages/reorder  (transacción + UNIQUE DEFERRABLE, usando UNNEST tipado)
-router.post("/wells/:id/stages/reorder", async (req, res) => {
-  const wellId = Number(req.params.id);
-  const { order } = req.body || {};
+  // POST /wells/:id/stages/reorder  (transacción + UNIQUE DEFERRABLE, usando UNNEST tipado)
+  router.post("/wells/:id/stages/reorder", async (req, res) => {
+    const wellId = Number(req.params.id);
+    const { order } = req.body || {};
 
-  if (!Number.isInteger(wellId)) {
-    return res.status(400).json({ ok: false, error: "wellId inválido" });
-  }
-  if (!intsUnique(order)) {
-    return res.status(400).json({ ok: false, error: "order debe ser arreglo de enteros únicos" });
-  }
+    if (!Number.isInteger(wellId)) {
+      return res.status(400).json({ ok: false, error: "wellId inválido" });
+    }
+    if (!intsUnique(order)) {
+      return res.status(400).json({ ok: false, error: "order debe ser arreglo de enteros únicos" });
+    }
 
-  const ids = order.map(n => Number(n)); // asegurar enteros
+    const ids = order.map(n => Number(n)); // asegurar enteros
 
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
 
-    // Diferir la UNIQUE (requiere restricción DEFERRABLE)
-    await client.query("SET CONSTRAINTS uq_stage_order_per_well DEFERRED");
+      // Diferir la UNIQUE (requiere restricción DEFERRABLE)
+      await client.query("SET CONSTRAINTS uq_stage_order_per_well DEFERRED");
 
-    // Bloquear filas del pozo
-    await client.query(
-      `SELECT id FROM public.well_stages WHERE well_id = $1 FOR UPDATE`,
-      [wellId]
-    );
+      // Bloquear filas del pozo
+      await client.query(
+        `SELECT id FROM public.well_stages WHERE well_id = $1 FOR UPDATE`,
+        [wellId]
+      );
 
-    // Usar UNNEST con WITH ORDINALITY para mapear [id] -> índice 1..N
-    const upd = await client.query(
-      `
+      // Usar UNNEST con WITH ORDINALITY para mapear [id] -> índice 1..N
+      const upd = await client.query(
+        `
       UPDATE public.well_stages AS ws
          SET order_index = v.new_index
         FROM (
@@ -337,23 +337,23 @@ router.post("/wells/:id/stages/reorder", async (req, res) => {
        WHERE ws.id = v.id
          AND ws.well_id = $1
       `,
-      [wellId, ids]
-    );
+        [wellId, ids]
+      );
 
-    if (upd.rowCount !== ids.length) {
-      throw new Error("Algunos IDs no pertenecen al pozo o no existen");
+      if (upd.rowCount !== ids.length) {
+        throw new Error("Algunos IDs no pertenecen al pozo o no existen");
+      }
+
+      await client.query("COMMIT");
+      return res.json({ ok: true });
+    } catch (e) {
+      await client.query("ROLLBACK");
+      console.error("reorder error:", e);
+      return res.status(500).json({ ok: false, error: e.message || "No se pudo reordenar" });
+    } finally {
+      client.release();
     }
-
-    await client.query("COMMIT");
-    return res.json({ ok: true });
-  } catch (e) {
-    await client.query("ROLLBACK");
-    console.error("reorder error:", e);
-    return res.status(500).json({ ok: false, error: e.message || "No se pudo reordenar" });
-  } finally {
-    client.release();
-  }
-});
+  });
 
   // =========================
   //        MATERIALS
@@ -413,7 +413,7 @@ router.post("/wells/:id/stages/reorder", async (req, res) => {
         "SELECT * FROM public.materials WHERE id = $1",
         [id]
       );
-    if (!r.rows.length)
+      if (!r.rows.length)
         return res.status(404).json({ ok: false, error: "No encontrado" });
       res.json({ ok: true, data: r.rows[0] });
     } catch (e) {
@@ -475,52 +475,60 @@ router.post("/wells/:id/stages/reorder", async (req, res) => {
   });
 
   // PUT /materials/:id  (actualizar)
+  // PUT /materials/:id  (actualización parcial sin borrar valores no enviados)
   router.put("/materials/:id", async (req, res) => {
     try {
       const id = Number(req.params.id);
       const c = req.body || {};
+
+      // Normalización de entradas (undefined => null para que COALESCE conserve el valor actual)
+      const programa = (c.programa ? String(c.programa).toLowerCase() : null); // enum o null
+      const alerta = (c.alerta ? String(c.alerta).toLowerCase() : null); // enum o null
+
       await pool.query(
         `UPDATE public.materials SET
-           material_name   = $1,
-           programa        = $2,
-           categoria       = $3,
-           especificacion  = $4,
-           cantidad        = $5,
-           unidad          = $6,
-           proveedor       = $7,
-           orden_servicio  = $8,
-           fecha_avanzada  = $9,
-           link_avanzada   = $10,
-           fecha_inspeccion= $11,
-           link_inspeccion = $12,
-           logistica       = $13,
-           alerta          = $14,
-           comentario      = $15
-         WHERE id = $16`,
+          material_name    = COALESCE($1,  material_name),
+          programa         = COALESCE($2::public.program_type, programa),
+          categoria        = COALESCE($3,  categoria),
+          especificacion   = COALESCE($4,  especificacion),
+          cantidad         = COALESCE($5,  cantidad),
+          unidad           = COALESCE($6,  unidad),
+          proveedor        = COALESCE($7,  proveedor),
+          orden_servicio   = COALESCE($8,  orden_servicio),
+          fecha_avanzada   = COALESCE($9,  fecha_avanzada),
+          link_avanzada    = COALESCE($10, link_avanzada),
+          fecha_inspeccion = COALESCE($11, fecha_inspeccion),
+          link_inspeccion  = COALESCE($12, link_inspeccion),
+          logistica        = COALESCE($13, logistica),
+          alerta           = COALESCE($14::public.alert_type, alerta),
+          comentario       = COALESCE($15, comentario)
+        WHERE id = $16`,
         [
-          c.material_name || null,
-          (c.programa || "").toLowerCase() || null,
-          c.categoria || null,
-          c.especificacion || null,
-          c.cantidad ?? null,
-          c.unidad || null,
-          c.proveedor || null,
-          c.orden_servicio || null,
-          c.fecha_avanzada || null,
-          c.link_avanzada || null,
-          c.fecha_inspeccion || null,
-          c.link_inspeccion || null,
-          c.logistica || null,
-          (c.alerta || "").toLowerCase() || null,
-          c.comentario || null,
+          c.material_name ?? null,
+          programa,                           // enum o null (para conservar)
+          c.categoria ?? null,
+          c.especificacion ?? null,
+          (c.cantidad === undefined ? null : c.cantidad),
+          c.unidad ?? null,
+          c.proveedor ?? null,
+          c.orden_servicio ?? null,
+          c.fecha_avanzada ?? null,
+          c.link_avanzada ?? null,
+          c.fecha_inspeccion ?? null,
+          c.link_inspeccion ?? null,
+          c.logistica ?? null,
+          alerta,                              // enum o null (para conservar)
+          c.comentario ?? null,
           id,
         ]
       );
+
       res.json({ ok: true });
     } catch (e) {
       res.status(500).json({ ok: false, error: e.message });
     }
   });
+
 
   // DELETE /materials/:id
   router.delete("/materials/:id", async (req, res) => {
@@ -537,31 +545,31 @@ router.post("/wells/:id/stages/reorder", async (req, res) => {
   //          ALERTAS
   // =========================
 
-// GET /alerts -> lista de materiales con cualquier alerta (azul/verde/amarillo/rojo)
-// Filtros opcionales: ?well=ID&stage=ID&alerta=azul|verde|amarillo|rojo
-router.get("/alerts", async (req, res) => {
-  try {
-    const { well = "", stage = "", alerta = "" } = req.query;
+  // GET /alerts -> lista de materiales con cualquier alerta (azul/verde/amarillo/rojo)
+  // Filtros opcionales: ?well=ID&stage=ID&alerta=azul|verde|amarillo|rojo
+  router.get("/alerts", async (req, res) => {
+    try {
+      const { well = "", stage = "", alerta = "" } = req.query;
 
-    const where = ["1=1"];
-    const params = [];
+      const where = ["1=1"];
+      const params = [];
 
-    // Filtros opcionales
-    if (well) {
-      params.push(Number(well));
-      where.push(`w.id = $${params.length}`);
-    }
-    if (stage) {
-      params.push(Number(stage));
-      where.push(`s.id = $${params.length}`);
-    }
-    if (alerta && ["azul", "verde", "amarillo", "rojo"].includes(String(alerta).toLowerCase())) {
-      params.push(String(alerta).toLowerCase());
-      where.push(`m.alerta = $${params.length}::public.alert_type`);
-    }
+      // Filtros opcionales
+      if (well) {
+        params.push(Number(well));
+        where.push(`w.id = $${params.length}`);
+      }
+      if (stage) {
+        params.push(Number(stage));
+        where.push(`s.id = $${params.length}`);
+      }
+      if (alerta && ["azul", "verde", "amarillo", "rojo"].includes(String(alerta).toLowerCase())) {
+        params.push(String(alerta).toLowerCase());
+        where.push(`m.alerta = $${params.length}::public.alert_type`);
+      }
 
-    // Orden por severidad (rojo > amarillo > verde > azul), luego pozo/etapa
-    const sql = `
+      // Orden por severidad (rojo > amarillo > verde > azul), luego pozo/etapa
+      const sql = `
       SELECT 
         m.id                                   AS material_id,
         w.id                                   AS well_id,
@@ -585,26 +593,26 @@ router.get("/alerts", async (req, res) => {
                s.order_index ASC,
                m.id ASC
     `;
-    const r = await pool.query(sql, params);
+      const r = await pool.query(sql, params);
 
-    // Para dropdowns en el cliente
-    const wells = await pool.query(`
+      // Para dropdowns en el cliente
+      const wells = await pool.query(`
       SELECT w.id, w.name
       FROM public.wells w
       ORDER BY w.name ASC
     `);
 
-    res.json({
-      ok: true,
-      data: r.rows,
-      wells: wells.rows,
-      // hint para UI (rutas de edición existentes)
-      edit: { api: "/api/operativo/materials/:id", method: "PUT" }
-    });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: e.message });
-  }
-});
+      res.json({
+        ok: true,
+        data: r.rows,
+        wells: wells.rows,
+        // hint para UI (rutas de edición existentes)
+        edit: { api: "/api/operativo/materials/:id", method: "PUT" }
+      });
+    } catch (e) {
+      res.status(500).json({ ok: false, error: e.message });
+    }
+  });
 
   return router;
 }
