@@ -2,8 +2,6 @@
 import express from "express";
 const router = express.Router();
 
-import buildOperativoExport from "./routes/operativo_export.js";
-app.use("/api/operativo", buildOperativoExport(pool));
 
 // ---- helper: castear seguro a entero (o null)
 function toInt(v, fallback = null) {
