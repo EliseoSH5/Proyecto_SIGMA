@@ -474,60 +474,60 @@ export default function buildOperativoRoutes(pool) {
     }
   });
 
-  // PUT /materials/:id  (actualizar)
-  // PUT /materials/:id  (actualización parcial sin borrar valores no enviados)
-  router.put("/materials/:id", async (req, res) => {
-    try {
-      const id = Number(req.params.id);
-      const c = req.body || {};
+// PUT /materials/:id  (actualizar sin borrar campos si vienen vacíos y tipando parámetros)
+router.put("/materials/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const c = req.body || {};
 
-      // Normalización de entradas (undefined => null para que COALESCE conserve el valor actual)
-      const programa = (c.programa ? String(c.programa).toLowerCase() : null); // enum o null
-      const alerta = (c.alerta ? String(c.alerta).toLowerCase() : null); // enum o null
+    await pool.query(
+      `
+      UPDATE public.materials SET
+        material_name    = COALESCE(NULLIF($1::text, ''), material_name),
+        /* Si programa/alerta son ENUM en tu DB, deja los casts al enum.
+           Si son TEXT, quita ::public.program_type / ::public.alert_type. */
+        programa         = COALESCE(NULLIF($2::text, '')::public.program_type, programa),
+        categoria        = COALESCE(NULLIF($3::text, ''), categoria),
+        especificacion   = COALESCE(NULLIF($4::text, ''), especificacion),
+        cantidad         = COALESCE($5::numeric, cantidad),
+        unidad           = COALESCE(NULLIF($6::text, ''), unidad),
+        proveedor        = COALESCE(NULLIF($7::text, ''), proveedor),
+        orden_servicio   = COALESCE(NULLIF($8::text, ''), orden_servicio),
+        fecha_avanzada   = COALESCE($9::date, fecha_avanzada),
+        link_avanzada    = COALESCE(NULLIF($10::text, ''), link_avanzada),
+        fecha_inspeccion = COALESCE($11::date, fecha_inspeccion),
+        link_inspeccion  = COALESCE(NULLIF($12::text, ''), link_inspeccion),
+        logistica        = COALESCE(NULLIF($13::text, ''), logistica),
+        alerta           = COALESCE(NULLIF($14::text, '')::public.alert_type, alerta),
+        comentario       = COALESCE(NULLIF($15::text, ''), comentario)
+      WHERE id = $16
+      `,
+      [
+        c.material_name ?? null,
+        (c.programa ?? null) && String(c.programa).toLowerCase(),
+        c.categoria ?? null,
+        c.especificacion ?? null,
+        c.cantidad ?? null,
+        c.unidad ?? null,
+        c.proveedor ?? null,
+        c.orden_servicio ?? null,
+        c.fecha_avanzada ?? null,
+        c.link_avanzada ?? null,
+        c.fecha_inspeccion ?? null,
+        c.link_inspeccion ?? null,
+        c.logistica ?? null,
+        (c.alerta ?? null) && String(c.alerta).toLowerCase(),
+        c.comentario ?? null,
+        id,
+      ]
+    );
 
-      await pool.query(
-        `UPDATE public.materials SET
-          material_name    = COALESCE($1,  material_name),
-          programa         = COALESCE($2::public.program_type, programa),
-          categoria        = COALESCE($3,  categoria),
-          especificacion   = COALESCE($4,  especificacion),
-          cantidad         = COALESCE($5,  cantidad),
-          unidad           = COALESCE($6,  unidad),
-          proveedor        = COALESCE($7,  proveedor),
-          orden_servicio   = COALESCE($8,  orden_servicio),
-          fecha_avanzada   = COALESCE($9,  fecha_avanzada),
-          link_avanzada    = COALESCE($10, link_avanzada),
-          fecha_inspeccion = COALESCE($11, fecha_inspeccion),
-          link_inspeccion  = COALESCE($12, link_inspeccion),
-          logistica        = COALESCE($13, logistica),
-          alerta           = COALESCE($14::public.alert_type, alerta),
-          comentario       = COALESCE($15, comentario)
-        WHERE id = $16`,
-        [
-          c.material_name ?? null,
-          programa,                           // enum o null (para conservar)
-          c.categoria ?? null,
-          c.especificacion ?? null,
-          (c.cantidad === undefined ? null : c.cantidad),
-          c.unidad ?? null,
-          c.proveedor ?? null,
-          c.orden_servicio ?? null,
-          c.fecha_avanzada ?? null,
-          c.link_avanzada ?? null,
-          c.fecha_inspeccion ?? null,
-          c.link_inspeccion ?? null,
-          c.logistica ?? null,
-          alerta,                              // enum o null (para conservar)
-          c.comentario ?? null,
-          id,
-        ]
-      );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
 
-      res.json({ ok: true });
-    } catch (e) {
-      res.status(500).json({ ok: false, error: e.message });
-    }
-  });
 
 
   // DELETE /materials/:id
