@@ -57,12 +57,12 @@ function row(w) {
     const btn = e.currentTarget;
 
     // Respeta filtro de alerta si existe en la vista
-    const fAlert = document.getElementById('fAlert');
     const qs = new URLSearchParams();
-    qs.set('well', String(w.id));
+    const fAlert = document.getElementById('fAlert');
     if (fAlert?.value) qs.set('alerta', fAlert.value);
+    // include_empty=1 si quieres hojas sin materiales
+    const url = `/api/operativo/planeacion/export/by-well/${w.id}${qs.toString() ? `?${qs.toString()}` : ""}`;
 
-    const url = `/api/operativo/planeacion/export?${qs.toString()}`;
 
     // Nombre seguro para el archivo
     const safeName = String(w.name || 'pozo')
@@ -80,7 +80,7 @@ function row(w) {
         try {
           const j = await resp.json();
           if (j?.error) msg = j.error;
-        } catch {}
+        } catch { }
         throw new Error(msg);
       }
 
