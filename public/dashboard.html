@@ -4,38 +4,40 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>SIGMA • Dashboard</title>
-    <link rel="stylesheet" href="./css/styles.css">
-    <link rel="stylesheet" href="./css/operativo.css">
-    <link rel="stylesheet" href="./css/dashboard_patch.css">
-
+    <link rel="stylesheet" href="./css/styles.css" />
+    <link rel="stylesheet" href="./css/operativo.css" />
+    <link rel="stylesheet" href="./css/dashboard_patch.css" />
   </head>
   <body>
     <div class="app">
       <div id="sidebar-container"></div>
 
       <main class="main">
+        <!-- El topbar real lo inyecta init_partials.js, este es solo fallback -->
         <div class="topbar">
           <div class="bell">🔔</div>
           <div class="avatar">
-            <div class="avatar-badge" id="avatar"></div>
+            <div class="avatar-badge" id="avatar">US</div>
             <div>
               <div id="fullName">Usuario</div>
-              <div class="small" id="emailLabel">mail@example.com</div>
+              <div class="small" id="emailLabel">correo@ejemplo.com</div>
             </div>
           </div>
         </div>
-        <div class="content">
-          <h2>Bienvenido a SIGMA</h2>
-          <p>
-            Este dashboard es el esqueleto inicial. Los módulos se activarán más
-            adelante.
-          </p>
+
+        <div class="page">
+          <h2>RESUMEN DE MATERIALES POR POZO</h2>
+
+          <!-- Aquí se inyectarán las tarjetas por pozo -->
+          <div id="wellsGrid" class="dashboard-wells-grid"></div>
         </div>
       </main>
     </div>
 
+    <!-- Lógica del dashboard (tarjetas por pozo) -->
     <script src="./js/dashboard.js"></script>
-  </body>
-  <script type="module" src="./js/init_partials.js"></script>
 
+    <!-- Sidebar y topbar dinámicos -->
+    <script type="module" src="./js/init_partials.js"></script>
+  </body>
 </html>
