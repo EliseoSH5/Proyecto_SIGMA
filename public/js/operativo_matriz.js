@@ -21,11 +21,20 @@ fApply?.addEventListener('click', () => load());
 
 function row(w) {
   const tr = document.createElement('tr');
+
+  // Texto a mostrar en "Avance actual"
+  const avance =
+    w.current_progress
+      ? w.current_progress                             // viene calculado del backend
+      : (w.first_stage
+        ? `Etapa ${w.first_stage} - En proceso`      // pozo con etapas pero sin progress
+        : 'Sin etapas');                             // pozo sin etapas
+
   tr.innerHTML = `
     <td><input type="checkbox"/></td>
     <td>${w.team || '-'}</td>
     <td>${w.name}</td>
-    <td>${w.current_progress || `Etapa ${w.first_stage || ''} - en proceso`}</td>
+    <td>${avance}</td>
     <td class="actions">
       <a title="Ver etapas" data-action="view">👁️</a>
       <a title="Editar pozo" data-action="edit">✏️</a>

@@ -64,11 +64,39 @@ export default function buildOperativoRoutes(pool) {
                  WHERE well_id = w.id
               ORDER BY order_index ASC, id ASC
                  LIMIT 1) AS first_stage,
-               w.current_progress
+               CASE
+                 -- Hay alguna etapa pendiente o sin marcar -> mostrar primera "En proceso"
+                 WHEN EXISTS (
+                   SELECT 1
+                     FROM public.well_stages s
+                    WHERE s.well_id = w.id
+                      AND (s.progress IS NULL OR LOWER(s.progress) LIKE 'en proceso%')
+                 ) THEN (
+                   SELECT 'Etapa ' || COALESCE(s.stage_name, '') || ' - en proceso'
+                     FROM public.well_stages s
+                    WHERE s.well_id = w.id
+                      AND (s.progress IS NULL OR LOWER(s.progress) LIKE 'en proceso%')
+                 ORDER BY s.order_index ASC, s.id ASC
+                    LIMIT 1
+                 )
+                 -- Todas las etapas tienen progress ~ 'Completado'
+                 WHEN EXISTS (
+                   SELECT 1
+                     FROM public.well_stages s
+                    WHERE s.well_id = w.id
+                 ) AND NOT EXISTS (
+                   SELECT 1
+                     FROM public.well_stages s
+                    WHERE s.well_id = w.id
+                      AND (s.progress IS NULL OR LOWER(s.progress) NOT LIKE 'completado%')
+                 ) THEN 'Pozo completado'
+                 ELSE NULL
+               END AS current_progress
           FROM public.wells w
          ${where.length ? "WHERE " + where.join(" AND ") : ""}
       ORDER BY ${sortCol} ${ord}, w.id DESC
       `;
+
       const r = await pool.query(sql, params);
       res.json({ ok: true, data: r.rows });
     } catch (e) {
@@ -474,14 +502,14 @@ export default function buildOperativoRoutes(pool) {
     }
   });
 
-// PUT /materials/:id  (actualizar sin borrar campos si vienen vacíos y tipando parámetros)
-router.put("/materials/:id", async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    const c = req.body || {};
+  // PUT /materials/:id  (actualizar sin borrar campos si vienen vacíos y tipando parámetros)
+  router.put("/materials/:id", async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const c = req.body || {};
 
-    await pool.query(
-      `
+      await pool.query(
+        `
       UPDATE public.materials SET
         material_name    = COALESCE(NULLIF($1::text, ''), material_name),
         /* Si programa/alerta son ENUM en tu DB, deja los casts al enum.
@@ -502,31 +530,31 @@ router.put("/materials/:id", async (req, res) => {
         comentario       = COALESCE(NULLIF($15::text, ''), comentario)
       WHERE id = $16
       `,
-      [
-        c.material_name ?? null,
-        (c.programa ?? null) && String(c.programa).toLowerCase(),
-        c.categoria ?? null,
-        c.especificacion ?? null,
-        c.cantidad ?? null,
-        c.unidad ?? null,
-        c.proveedor ?? null,
-        c.orden_servicio ?? null,
-        c.fecha_avanzada ?? null,
-        c.link_avanzada ?? null,
-        c.fecha_inspeccion ?? null,
-        c.link_inspeccion ?? null,
-        c.logistica ?? null,
-        (c.alerta ?? null) && String(c.alerta).toLowerCase(),
-        c.comentario ?? null,
-        id,
-      ]
-    );
+        [
+          c.material_name ?? null,
+          (c.programa ?? null) && String(c.programa).toLowerCase(),
+          c.categoria ?? null,
+          c.especificacion ?? null,
+          c.cantidad ?? null,
+          c.unidad ?? null,
+          c.proveedor ?? null,
+          c.orden_servicio ?? null,
+          c.fecha_avanzada ?? null,
+          c.link_avanzada ?? null,
+          c.fecha_inspeccion ?? null,
+          c.link_inspeccion ?? null,
+          c.logistica ?? null,
+          (c.alerta ?? null) && String(c.alerta).toLowerCase(),
+          c.comentario ?? null,
+          id,
+        ]
+      );
 
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: e.message });
-  }
-});
+      res.json({ ok: true });
+    } catch (e) {
+      res.status(500).json({ ok: false, error: e.message });
+    }
+  });
 
 
 
