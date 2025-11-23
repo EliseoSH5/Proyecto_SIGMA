@@ -23,6 +23,9 @@ const ALERT_LABEL = {
   azul: "Azul",
 };
 
+let dashboardMode = "activos";
+
+
 // Helper para consumir APIs del backend Operativo
 async function fetchJson(url) {
   const res = await fetch(url, { credentials: "include" });
@@ -33,10 +36,35 @@ async function fetchJson(url) {
 
 // ====== INICIALIZAR DASHBOARD ======
 document.addEventListener("DOMContentLoaded", () => {
+  initDashboardToggle();
   loadWellsDashboard();
 });
 
-// Carga todos los pozos y crea una tarjeta por cada uno
+function initDashboardToggle() {
+  const container = document.querySelector(".dashboard-toggle");
+  if (!container) return;
+
+  const buttons = container.querySelectorAll("[data-mode]");
+
+  buttons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const mode = btn.dataset.mode;
+      if (!mode || mode === dashboardMode) return;
+
+      dashboardMode = mode;
+
+      // Actualizar clases activas
+      buttons.forEach((b) => {
+        b.classList.toggle("active", b === btn);
+      });
+
+      // Recargar dashboard con el nuevo modo
+      loadWellsDashboard();
+    });
+  });
+}
+
+
 async function loadWellsDashboard() {
   const container = document.getElementById("wellsGrid");
   if (!container) return;
@@ -46,9 +74,19 @@ async function loadWellsDashboard() {
 
   let wells = [];
   try {
-    // Puedes ajustar sort/order si lo deseas
     const data = await fetchJson("/api/operativo/wells?sort=name&order=asc");
     wells = Array.isArray(data) ? data : [];
+
+    const isCompleted = (w) => {
+      const p = (w.current_progress || "").toLowerCase().trim();
+      return p === "pozo completado";
+    };
+
+    if (dashboardMode === "activos") {
+      wells = wells.filter((w) => !isCompleted(w));
+    } else if (dashboardMode === "completados") {
+      wells = wells.filter(isCompleted);
+    }
   } catch (e) {
     console.error(e);
     container.innerHTML =
@@ -58,7 +96,9 @@ async function loadWellsDashboard() {
 
   if (!wells.length) {
     container.innerHTML =
-      "<div class='cell-empty'>Aún no hay pozos registrados.</div>";
+      dashboardMode === "activos"
+        ? "<div class='cell-empty'>No hay pozos activos en proceso.</div>"
+        : "<div class='cell-empty'>Aún no hay pozos completados.</div>";
     return;
   }
 
@@ -70,6 +110,7 @@ async function loadWellsDashboard() {
     hydrateWellCard(card, well);
   }
 }
+
 
 // Crea la estructura visual de la tarjeta de un pozo
 function createWellCard(well) {
@@ -223,11 +264,10 @@ async function loadMaterialsForStage(stageId, tbody) {
           <td>${escapeHtml(proveedor)}</td>
           <td>${escapeHtml(estatus)}</td>
           <td class="cell-alert">
-            ${
-              alertLabel
-                ? `<span class="alert-dot ${alertClass}" title="${alertLabel}"></span>`
-                : ""
-            }
+            ${alertLabel
+          ? `<span class="alert-dot ${alertClass}" title="${alertLabel}"></span>`
+          : ""
+        }
           </td>
         </tr>
       `;
