@@ -1,11 +1,11 @@
 // public/js/operativo_alertas.js
 // Alertas: lista de materiales (todas las alertas) + filtros (Pozo, Etapa[dedup por nombre], Alerta)
-// + modal de detalle + botón Editar -> INFO MATERIAL + cierre de modal robusto
+// + modal de detalle + botón Editar -> FORMULARIO MATERIAL + cierre de modal robusto
 
 import { api } from "./operativo_shared.js";
 
-// === Configura aquí la página de edición del material ===
-const MATERIAL_INFO_PAGE = "/operativo_materiales.html";
+// === Página a la que iremos al EDITAR un material desde alertas ===
+const MATERIAL_INFO_PAGE = "/operativo_material_form.html";
 
 // --- refs (tolerantes a null) ---
 const btnFilter = document.getElementById("btnFilter");
@@ -73,11 +73,12 @@ function norm(s) {
     .toLowerCase();
 }
 
-// Navegar a la pantalla "INFORMACIÓN MATERIAL" con material + stage
-function goToMaterialInfo({ material_id, stage_id }) {
+// Navegar a la pantalla de FORMULARIO MATERIAL con material + stage (+ well si existe)
+function goToMaterialInfo({ material_id, stage_id, well_id }) {
   const url = new URL(MATERIAL_INFO_PAGE, window.location.origin);
   url.searchParams.set("material", String(material_id)); // material a editar
   if (stage_id) url.searchParams.set("stage", String(stage_id));
+  if (well_id)  url.searchParams.set("well",  String(well_id));
   url.searchParams.set("action", "edit");
   window.location.href = url.toString();
 }
@@ -209,7 +210,6 @@ function row(it) {
 }
 
 // --- construir opciones de ETAPAS deduplicadas por NOMBRE ---
-// Devuelve pares [key,label] donde key = nombre normalizado, label = primer nombre visto
 function buildUniqueStageNames(rows) {
   const seen = new Map(); // key -> label
   for (const r of rows || []) {
@@ -217,7 +217,6 @@ function buildUniqueStageNames(rows) {
     const key = norm(label);
     if (!seen.has(key)) seen.set(key, label);
   }
-  // Mantener orden de aparición
   return Array.from(seen.entries()); // [[key,label], ...]
 }
 
@@ -236,14 +235,7 @@ fClear?.addEventListener("click", async () => {
 
 fApply?.addEventListener("click", () => load());
 
-// (Opcional) refrescar en vivo al cambiar otros selects:
-// fWell?.addEventListener("change", () => { fStage.value = ""; load(); });
-// fAlert?.addEventListener("change", () => { load(); });
-
 // --- carga principal ---
-// 1) Pide /alerts con filtros de Pozo/Alerta (SIN stage) para obtener el universo.
-// 2) Construye combo Etapas por NOMBRE (dedup) a partir de ese universo.
-// 3) Aplica filtro de Etapa por NOMBRE en cliente y renderiza.
 async function load() {
   const paramsForFetch = new URLSearchParams();
   if (fWell?.value)  paramsForFetch.set("well",  fWell.value);
@@ -260,17 +252,17 @@ async function load() {
   // Poblar Pozo
   if (Array.isArray(r.wells) && fWell) {
     const currentWell = fWell.value;
-    fWell.innerHTML = `<option value="">Todos</option>` + r.wells.map((w) => `<option value="${w.id}">${w.name}</option>`).join("");
+    fWell.innerHTML = `<option value="">Todos</option>` +
+      r.wells.map((w) => `<option value="${w.id}">${w.name}</option>`).join("");
     fWell.value = currentWell;
   }
 
-  // Construir Etapas deduplicadas por NOMBRE desde dataset (solo las que aparecen)
+  // Construir Etapas deduplicadas por NOMBRE desde dataset
   const currentStageKey = fStage?.value || "";
   const stagePairs = buildUniqueStageNames(r.data); // [[key,label], ...]
   if (fStage) {
     fStage.innerHTML = `<option value="">Todas</option>` +
       stagePairs.map(([key, label]) => `<option value="${key}">${label}</option>`).join("");
-    // Restaurar selección si aún existe, si no limpiar
     if (currentStageKey && stagePairs.some(([key]) => key === currentStageKey)) {
       fStage.value = currentStageKey;
     } else {

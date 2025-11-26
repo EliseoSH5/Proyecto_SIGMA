@@ -1,4 +1,4 @@
-import { api, qs, confirmDialog } from './operativo_shared.js';
+import { api, qs, confirmDialog, escapeHtml } from './operativo_shared.js';
 
 const wellId = qs('well');
 const body = document.getElementById('stagesBody');
@@ -11,10 +11,15 @@ function trForStage(s){
   const tr = document.createElement('tr');
   tr.setAttribute('draggable','true');
   tr.dataset.id = s.id;
+
+  // Texto seguro
+  const stageNameSafe = escapeHtml(s.stage_name || '-');
+  const pipeSafe = escapeHtml(s.pipe || '-');
+
   tr.innerHTML = `
     <td class="drag-handle">☰</td>
-    <td>${s.stage_name||'-'}</td>
-    <td>${s.pipe||'-'}</td>
+    <td>${stageNameSafe}</td>
+    <td>${pipeSafe}</td>
     <td>
       <select class="progress-select">
         <option value="en_proceso">En proceso</option>
@@ -27,11 +32,10 @@ function trForStage(s){
       <a title="Borrar" data-action="del">🗑️</a>
     </td>`;
 
-  // --- nuevo: control de avance ---
+  // --- control de avance ---
   const progressSelect = tr.querySelector('.progress-select');
   const initialProgress = (s.progress || 'En proceso').toLowerCase();
 
-  // Si no hay nada o no es "Completado", lo tratamos como "En proceso"
   progressSelect.value = initialProgress.startsWith('complet')
     ? 'completado'
     : 'en_proceso';
@@ -43,7 +47,6 @@ function trForStage(s){
     const res = await api.put(`/api/operativo/stages/${s.id}`, { progress: label });
     if (!res.ok) {
       alert(res.error || 'Error al actualizar el avance');
-      // Revertir selección si falla el guardado
       progressSelect.value = initialProgress.startsWith('complet')
         ? 'completado'
         : 'en_proceso';
@@ -52,16 +55,18 @@ function trForStage(s){
     }
   });
 
-  // --- lo que ya tenías: ver / editar / borrar ---
+  // --- acciones existentes ---
   tr.querySelector('[data-action="view"]').addEventListener('click',()=>{
     window.location.href = `./operativo_materiales.html?stage=${s.id}&well=${wellId}`;
   });
+
   tr.querySelector('[data-action="edit"]').addEventListener('click',async ()=>{
     const nn = prompt('Nuevo nombre de etapa', s.stage_name||'');
     if(nn===null) return;
     const res = await api.put(`/api/operativo/stages/${s.id}`, { stage_name: nn });
     if(res.ok) load(); else alert(res.error||'Error');
   });
+
   tr.querySelector('[data-action="del"]').addEventListener('click', async ()=>{
     const ok = await confirmDialog();
     if(!ok) return;
@@ -69,15 +74,16 @@ function trForStage(s){
     if(res.ok) load(); else alert(res.error||'Error');
   });
 
-  // --- lo que ya tenías: drag & drop + autosave ---
+  // --- drag & drop + autosave ---
   tr.addEventListener('dragstart', (e)=>{
     tr.classList.add('dragging');
     e.dataTransfer.effectAllowed = 'move';
     snapshotIds = currentIds(); // guarda orden actual
   });
+
   tr.addEventListener('dragend', async ()=>{
     tr.classList.remove('dragging');
-    await autosaveOrder(); // <--- GUARDADO AUTOMÁTICO AQUÍ
+    await autosaveOrder(); // guarda nuevo orden en el backend
   });
 
   tr.addEventListener('dragover', (e)=>{
@@ -94,6 +100,7 @@ function trForStage(s){
 
   return tr;
 }
+
 
 
 body.addEventListener('dragover', (e)=>{

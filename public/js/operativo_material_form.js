@@ -3,7 +3,8 @@ import { api, qs } from "./operativo_shared.js";
 
 // Compatibilidad: puede venir ?id=123 o ?material=123 (desde Alertas)
 const stageId = qs("stage");
-const id = qs("id") || qs("material");
+const wellId  = qs("well");
+const id      = qs("id") || qs("material");
 
 // Helpers
 const $ = (id) => document.getElementById(id);
@@ -13,8 +14,13 @@ const emptyToNull = (v) => (v === "" ? null : v);
 // Botones
 const btnSave = $("btnSave");
 const btnCancel = $("btnCancel");
+
+// Armamos la URL de regreso a materiales respetando stage + well
 if (btnCancel && stageId) {
-  btnCancel.href = `./operativo_materiales.html?stage=${stageId}`;
+  const params = new URLSearchParams();
+  params.set("stage", stageId);
+  if (wellId) params.set("well", wellId);
+  btnCancel.href = `./operativo_materiales.html?${params.toString()}`;
 }
 
 // ========= CARGA / HYDRATE =========
@@ -81,7 +87,7 @@ btnSave?.addEventListener("click", async () => {
       link_inspeccion: $("linkInspeccion").value.trim(),
       logistica: $("logistica").value,
       alerta: _alerta || null,     // "" -> null (backend conserva)
-      comentario: emptyToNull($("comentario")?.value || ""), // <-- clave: no sobreescribe con ""
+      comentario: emptyToNull($("comentario")?.value || ""), // no sobreescribe con ""
     };
 
     let res;
@@ -95,9 +101,15 @@ btnSave?.addEventListener("click", async () => {
       throw new Error(res.error || "Error al guardar");
     }
 
-    // Volver a la lista de materiales de la etapa
+    // Volver a la lista de materiales de la etapa, respetando well
     if (stageId) {
-      window.location.href = `./operativo_materiales.html?stage=${stageId}`;
+      const params = new URLSearchParams();
+      params.set("stage", stageId);
+      if (wellId) params.set("well", wellId);
+      window.location.href = `./operativo_materiales.html?${params.toString()}`;
+    } else if (wellId) {
+      // Caso raro: sin stage pero con well (por ejemplo desde alertas)
+      window.location.href = `./operativo_etapas.html?well=${wellId}`;
     } else {
       history.back();
     }

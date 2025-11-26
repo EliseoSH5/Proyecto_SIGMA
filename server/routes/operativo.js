@@ -2,6 +2,24 @@
 import express from "express";
 const router = express.Router();
 
+// Middleware de autorización por rol
+// Uso: requireRole('admin') o requireRole('admin','editor')
+function requireRole(...roles) {
+  return (req, res, next) => {
+    const user = req.user || {};
+    // Si por alguna razón el token viejo no tenía role, asumimos 'admin' para no romper.
+    const role = user.role || 'admin';
+
+    if (!roles.includes(role)) {
+      return res
+        .status(403)
+        .json({ ok: false, error: 'Permisos insuficientes para esta acción.' });
+    }
+    next();
+  };
+}
+
+
 
 // ---- helper: castear seguro a entero (o null)
 function toInt(v, fallback = null) {
@@ -65,14 +83,14 @@ export default function buildOperativoRoutes(pool) {
               ORDER BY order_index ASC, id ASC
                  LIMIT 1) AS first_stage,
                CASE
-                 -- Hay alguna etapa pendiente o sin marcar -> mostrar primera "En proceso"
+                 -- Hay alguna etapa pendiente o sin marcar -> mostrar la primera "En proceso"
                  WHEN EXISTS (
                    SELECT 1
                      FROM public.well_stages s
                     WHERE s.well_id = w.id
                       AND (s.progress IS NULL OR LOWER(s.progress) LIKE 'en proceso%')
                  ) THEN (
-                   SELECT 'Etapa ' || COALESCE(s.stage_name, '') || ' - en proceso'
+                   SELECT 'Etapa ' || COALESCE(s.stage_name, '') || ' - En proceso'
                      FROM public.well_stages s
                     WHERE s.well_id = w.id
                       AND (s.progress IS NULL OR LOWER(s.progress) LIKE 'en proceso%')
@@ -96,11 +114,10 @@ export default function buildOperativoRoutes(pool) {
          ${where.length ? "WHERE " + where.join(" AND ") : ""}
       ORDER BY ${sortCol} ${ord}, w.id DESC
       `;
-
       const r = await pool.query(sql, params);
       res.json({ ok: true, data: r.rows });
     } catch (e) {
-      res.status(500).json({ ok: false, error: e.message });
+      res.status(500).json({ ok: false, error: "Error interno. Contacta al administrador." });
     }
   });
 
@@ -121,34 +138,49 @@ export default function buildOperativoRoutes(pool) {
       w.stages = st.rows.map((row) => ({ ...row, position: row.order_index })); // compat
       res.json({ ok: true, data: w });
     } catch (e) {
-      res.status(500).json({ ok: false, error: e.message });
+      res.status(500).json({ ok: false, error: "Error interno. Contacta al administrador." });
     }
   });
 
-  // POST /wells  (crea pozo + etapas con order_index)
-  router.post("/wells", async (req, res) => {
-    const c = req.body || {};
+  // POST /wells  (crear pozo, opcionalmente con etapas)
+  router.post("/wells", requireRole('admin', 'editor'), async (req, res) => {
     const client = await pool.connect();
     try {
+      const { type, team, name, start_date, stages = [] } = req.body || {};
+
+      if (!type || !team || !name) {
+        return res
+          .status(400)
+          .json({ ok: false, error: "Faltan campos obligatorios (type, team, name)" });
+      }
+
       await client.query("BEGIN");
+
+      const c = {
+        type,
+        team,
+        name,
+        start_date: start_date || null,
+        stages_count: stages.length || 0,
+      };
 
       const ins = await client.query(
         `INSERT INTO public.wells (type, team, name, start_date, stages_count, current_progress)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING id`,
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id`,
         [c.type, c.team, c.name, c.start_date, c.stages_count, null]
       );
       const wellId = ins.rows[0].id;
 
-      // Insertar etapas asignando order_index (1..N en el orden enviado)
+      // Insertar etapas asignando order_index (1..N) usando el array "stages" REAL
       let idx = 1;
-      for (const s of c.stages || []) {
+      for (const s of stages || []) {
         const desiredOrder = toInt(s.position ?? s.order_index, null); // string->int
         await client.query(
           `INSERT INTO public.well_stages
-             (well_id, stage_name, pipe, drill_time, stage_change, progress, order_index)
-           VALUES
-             ($1, $2, $3, $4, $5, $6, COALESCE($7::int, $8::int))`,
+           (well_id, stage_name, pipe, drill_time, stage_change, progress, order_index)
+         VALUES
+           ($1, $2, $3, $4, $5, $6, COALESCE($7::int, $8::int))`,
           [
             wellId,
             s.stage_name || null,
@@ -156,58 +188,73 @@ export default function buildOperativoRoutes(pool) {
             s.drill_time ?? null,
             s.stage_change ?? null,
             s.progress || "En proceso",
-            desiredOrder, // INT o NULL
-            idx,          // fallback incremental
+            desiredOrder,
+            idx,
           ]
         );
-        idx += 1;
+        idx++;
       }
 
       await client.query("COMMIT");
       res.json({ ok: true, id: wellId });
     } catch (e) {
       await client.query("ROLLBACK");
-      res.status(500).json({ ok: false, error: e.message });
+      console.error(e);
+      res.status(500).json({ ok: false, error: "Error interno. Contacta al administrador." });
     } finally {
       client.release();
     }
   });
 
+
   // PUT /wells/:id  (actualiza pozo y upsert de etapas SIN borrar existentes)
-  router.put("/wells/:id", async (req, res) => {
+  router.put("/wells/:id", requireRole('admin', 'editor'), async (req, res) => {
     const id = Number(req.params.id);
     const c = req.body || {};
     const client = await pool.connect();
+
     try {
+      if (!Number.isInteger(id)) {
+        return res.status(400).json({ ok: false, error: "Pozo inválido" });
+      }
+
       await client.query("BEGIN");
 
       // Actualiza los datos del pozo
       await client.query(
         `UPDATE public.wells
-            SET type = $1,
-                team = $2,
-                name = $3,
-                start_date = $4,
-                stages_count = $5
-          WHERE id = $6`,
-        [c.type, c.team, c.name, c.start_date, c.stages_count, id]
+          SET type         = $1,
+              team         = $2,
+              name         = $3,
+              start_date   = $4,
+              stages_count = $5
+        WHERE id = $6`,
+        [
+          c.type || null,
+          c.team || null,
+          c.name || null,
+          c.start_date || null,
+          Number.isFinite(c.stages_count) ? c.stages_count : (c.stages?.length || 0),
+          id,
+        ]
       );
 
-      // Upsert de etapas
+      // Upsert de etapas (actualiza las que tienen id, inserta las nuevas sin id)
       for (const s of c.stages || []) {
         const desiredOrder = toInt(s.position ?? s.order_index, null);
         const hasId = Number.isInteger(s.id);
+
         if (hasId) {
           // UPDATE etapa existente
           await client.query(
             `UPDATE public.well_stages
-                SET stage_name  = $1,
-                    pipe        = $2,
-                    drill_time  = $3,
-                    stage_change= $4,
-                    progress    = COALESCE($5, progress),
-                    order_index = COALESCE($6::int, order_index)
-              WHERE id = $7 AND well_id = $8`,
+              SET stage_name  = $1,
+                  pipe        = $2,
+                  drill_time  = $3,
+                  stage_change= $4,
+                  progress    = COALESCE($5, progress),
+                  order_index = COALESCE($6::int, order_index)
+            WHERE id = $7 AND well_id = $8`,
             [
               s.stage_name || null,
               s.pipe || null,
@@ -223,10 +270,15 @@ export default function buildOperativoRoutes(pool) {
           // INSERT nueva etapa; si no mandan order_index, usar MAX(order_index)+1
           await client.query(
             `INSERT INTO public.well_stages
-               (well_id, stage_name, pipe, drill_time, stage_change, progress, order_index)
-             VALUES
-               ($1, $2, $3, $4, $5, $6,
-                COALESCE($7::int, (SELECT COALESCE(MAX(order_index),0)+1 FROM public.well_stages WHERE well_id=$1)))`,
+             (well_id, stage_name, pipe, drill_time, stage_change, progress, order_index)
+           VALUES
+             ($1, $2, $3, $4, $5, $6,
+              COALESCE(
+                $7::int,
+                (SELECT COALESCE(MAX(order_index),0)+1
+                   FROM public.well_stages
+                  WHERE well_id=$1)
+              ))`,
             [
               id,
               s.stage_name || null,
@@ -241,30 +293,50 @@ export default function buildOperativoRoutes(pool) {
       }
 
       await client.query("COMMIT");
-      res.json({ ok: true });
+      return res.json({ ok: true });
     } catch (e) {
       await client.query("ROLLBACK");
-      res.status(500).json({ ok: false, error: e.message });
+      console.error("PUT /wells/:id error:", e);
+      return res
+        .status(500)
+        .json({ ok: false, error: "Error interno. Contacta al administrador." });
     } finally {
       client.release();
     }
   });
 
-  // DELETE /wells/:id  (borra pozo y cascada manual en materials)
-  router.delete("/wells/:id", async (req, res) => {
+
+  // DELETE /wells/:id
+  router.delete("/wells/:id", requireRole('admin', 'editor'), async (req, res) => {
+    const client = await pool.connect();
     try {
       const id = Number(req.params.id);
-      await pool.query(
-        "DELETE FROM public.materials USING public.well_stages WHERE public.materials.stage_id = public.well_stages.id AND public.well_stages.well_id = $1",
+
+      await client.query("BEGIN");
+
+      // Borrar materiales asociados a las etapas del pozo
+      await client.query(
+        `DELETE FROM public.materials
+          WHERE stage_id IN (
+            SELECT id FROM public.well_stages WHERE well_id = $1
+          )`,
         [id]
       );
-      await pool.query("DELETE FROM public.well_stages WHERE well_id = $1", [
-        id,
-      ]);
-      await pool.query("DELETE FROM public.wells WHERE id = $1", [id]);
+      // Borrar etapas
+      await client.query(
+        "DELETE FROM public.well_stages WHERE well_id = $1",
+        [id]
+      );
+      // Borrar pozo
+      await client.query("DELETE FROM public.wells WHERE id = $1", [id]);
+
+      await client.query("COMMIT");
       res.json({ ok: true });
     } catch (e) {
-      res.status(500).json({ ok: false, error: e.message });
+      await client.query("ROLLBACK");
+      res.status(500).json({ ok: false, error: "Error interno. Contacta al administrador." });
+    } finally {
+      client.release();
     }
   });
 
@@ -289,12 +361,12 @@ export default function buildOperativoRoutes(pool) {
       }));
       res.json({ ok: true, data });
     } catch (e) {
-      res.status(500).json({ ok: false, error: e.message });
+      res.status(500).json({ ok: false, error: "Error interno. Contacta al administrador." });
     }
   });
 
   // PUT /stages/:id  (edición de etapa SIN cambiar order_index aquí)
-  router.put("/stages/:id", async (req, res) => {
+  router.put("/stages/:id", requireRole('admin', 'editor'), async (req, res) => {
     try {
       const id = Number(req.params.id);
       const { stage_name, pipe, progress } = req.body || {};
@@ -308,32 +380,37 @@ export default function buildOperativoRoutes(pool) {
       );
       res.json({ ok: true });
     } catch (e) {
-      res.status(500).json({ ok: false, error: e.message });
+      res.status(500).json({ ok: false, error: "Error interno. Contacta al administrador." });
     }
   });
 
-  // DELETE /stages/:id
-  router.delete("/stages/:id", async (req, res) => {
+  // DELETE /stages/:id (borrar etapa y sus materiales)
+  router.delete("/stages/:id", requireRole('admin', 'editor'), async (req, res) => {
+    const client = await pool.connect();
     try {
       const id = Number(req.params.id);
-      await pool.query("DELETE FROM public.materials WHERE stage_id = $1", [
+
+      await client.query("BEGIN");
+      await client.query("DELETE FROM public.materials WHERE stage_id = $1", [
         id,
       ]);
-      await pool.query("DELETE FROM public.well_stages WHERE id = $1", [id]);
+      await client.query("DELETE FROM public.well_stages WHERE id = $1", [id]);
+      await client.query("COMMIT");
+
       res.json({ ok: true });
     } catch (e) {
-      res.status(500).json({ ok: false, error: e.message });
+      await client.query("ROLLBACK");
+      res.status(500).json({ ok: false, error: "Error interno. Contacta al administrador." });
+    } finally {
+      client.release();
     }
   });
 
-  // POST /wells/:id/stages/reorder  (transacción + UNIQUE DEFERRABLE, usando UNNEST tipado)
-  router.post("/wells/:id/stages/reorder", async (req, res) => {
+  // POST /wells/:id/stages/reorder
+  router.post("/wells/:id/stages/reorder", requireRole('admin', 'editor'), async (req, res) => {
     const wellId = Number(req.params.id);
     const { order } = req.body || {};
 
-    if (!Number.isInteger(wellId)) {
-      return res.status(400).json({ ok: false, error: "wellId inválido" });
-    }
     if (!intsUnique(order)) {
       return res.status(400).json({ ok: false, error: "order debe ser arreglo de enteros únicos" });
     }
@@ -377,7 +454,7 @@ export default function buildOperativoRoutes(pool) {
     } catch (e) {
       await client.query("ROLLBACK");
       console.error("reorder error:", e);
-      return res.status(500).json({ ok: false, error: e.message || "No se pudo reordenar" });
+      return res.status(500).json({ ok: false, error: "No se pudo reordenar el orden de las etapas. Intenta de nuevo." });
     } finally {
       client.release();
     }
@@ -390,16 +467,21 @@ export default function buildOperativoRoutes(pool) {
   // GET /stages/:id/materials  (lista con filtros)
   router.get("/stages/:id/materials", async (req, res) => {
     try {
-      const id = Number(req.params.id);
+      const stageId = Number(req.params.id);
+      if (!Number.isInteger(stageId)) {
+        return res.status(400).json({ ok: false, error: "Etapa inválida" });
+      }
+
       const { q = "", programa = "", alerta = "" } = req.query;
 
       const where = ["stage_id = $1"];
-      const params = [id];
+      const params = [stageId];
 
       if (q) {
         params.push(`%${q}%`);
+        const idx = params.length;
         where.push(
-          `(material_name ILIKE $${params.length} OR categoria ILIKE $${params.length} OR especificacion ILIKE $${params.length} OR proveedor ILIKE $${params.length})`
+          `(categoria ILIKE $${idx} OR especificacion ILIKE $${idx} OR proveedor ILIKE $${idx})`
         );
       }
 
@@ -407,8 +489,7 @@ export default function buildOperativoRoutes(pool) {
         const p = String(programa).toLowerCase();
         if (p === "programa" || p === "contingencia") {
           params.push(p);
-          // enum en DB: program_type (ajusta si tu enum se llama distinto o quita el cast si es TEXT)
-          where.push(`programa = $${params.length}::public.program_type`);
+          where.push(`programa = $${params.length}`);
         }
       }
 
@@ -416,20 +497,29 @@ export default function buildOperativoRoutes(pool) {
         const a = String(alerta).toLowerCase();
         if (["azul", "verde", "amarillo", "rojo"].includes(a)) {
           params.push(a);
-          // enum en DB: alert_type (ajusta si tu enum se llama distinto o quita el cast si es TEXT)
-          where.push(`alerta = $${params.length}::public.alert_type`);
+          where.push(`alerta = $${params.length}`);
         }
       }
 
       const sql = `
-        SELECT * FROM public.materials
-         WHERE ${where.join(" AND ")}
-      ORDER BY id ASC
-      `;
+      SELECT *
+        FROM public.materials
+       WHERE ${where.join(" AND ")}
+    ORDER BY
+      CASE alerta
+        WHEN 'rojo' THEN 1
+        WHEN 'amarillo' THEN 2
+        WHEN 'verde' THEN 3
+        WHEN 'azul' THEN 4
+        ELSE 5
+      END,
+      id ASC
+    `;
       const r = await pool.query(sql, params);
       res.json({ ok: true, data: r.rows });
     } catch (e) {
-      res.status(500).json({ ok: false, error: e.message });
+      console.error("GET /stages/:id/materials error:", e);
+      res.status(500).json({ ok: false, error: "Error interno. Contacta al administrador." });
     }
   });
 
@@ -437,137 +527,220 @@ export default function buildOperativoRoutes(pool) {
   router.get("/materials/:id", async (req, res) => {
     try {
       const id = Number(req.params.id);
+      if (!Number.isInteger(id)) {
+        return res.status(400).json({ ok: false, error: "Material inválido" });
+      }
       const r = await pool.query(
         "SELECT * FROM public.materials WHERE id = $1",
         [id]
       );
-      if (!r.rows.length)
+      if (!r.rows.length) {
         return res.status(404).json({ ok: false, error: "No encontrado" });
+      }
       res.json({ ok: true, data: r.rows[0] });
     } catch (e) {
-      res.status(500).json({ ok: false, error: e.message });
+      console.error("GET /materials/:id error:", e);
+      res.status(500).json({ ok: false, error: "Error interno. Contacta al administrador." });
     }
   });
 
   // POST /stages/:id/materials  (crear)
-  router.post("/stages/:id/materials", async (req, res) => {
+  router.post("/stages/:id/materials", requireRole('admin', 'editor'), async (req, res) => {
     try {
-      const stage_id = Number(req.params.id);
+      const stageId = Number(req.params.id);
+      if (!Number.isInteger(stageId)) {
+        return res.status(400).json({ ok: false, error: "Etapa inválida" });
+      }
+
       const c = req.body || {};
 
-      // obtener well_id de la etapa
+      // Sanitizadores básicos
+      const cleanText = (v) =>
+        v === "" || v === undefined || v === null ? null : String(v);
+
+      const cleanNum = (v) => {
+        if (v === "" || v === undefined || v === null) return null;
+        const n = Number(v);
+        return Number.isFinite(n) ? n : null;
+      };
+
+      const cleanDate = (v) =>
+        v === "" || v === undefined || v === null ? null : String(v); // 'YYYY-MM-DD'
+
+      // 1) Obtener well_id de la etapa
       const ws = await pool.query(
         "SELECT well_id FROM public.well_stages WHERE id = $1",
-        [stage_id]
+        [stageId]
       );
-      if (!ws.rows.length)
+      if (!ws.rows.length) {
         return res.status(400).json({ ok: false, error: "Etapa inválida" });
-      const well_id = ws.rows[0].well_id;
+      }
+      const wellId = ws.rows[0].well_id;
 
+      // 2) Limpiar valores que vamos a insertar
+      const materialNameVal = cleanText(c.material_name);
+      const programaVal = cleanText(c.programa && String(c.programa).toLowerCase());
+      const categoriaVal = cleanText(c.categoria);
+      const especificacionVal = cleanText(c.especificacion);
+      const cantidadVal = cleanNum(c.cantidad);
+      const unidadVal = cleanText(c.unidad);
+      const proveedorVal = cleanText(c.proveedor);
+      const ordenServicioVal = cleanText(c.orden_servicio);
+      const fechaAvanzadaVal = cleanDate(c.fecha_avanzada);
+      const linkAvanzadaVal = cleanText(c.link_avanzada);
+      const fechaInspeccionVal = cleanDate(c.fecha_inspeccion);
+      const linkInspeccionVal = cleanText(c.link_inspeccion);
+      const logisticaVal = cleanText(c.logistica);
+      const alertaVal = cleanText((c.alerta || "azul").toLowerCase());
+      const comentarioVal = cleanText(c.comentario);
+
+      // 3) Insertar en materials incluyendo well_id + stage_id
       const ins = await pool.query(
         `INSERT INTO public.materials (
-            well_id, stage_id, material_name, programa, categoria, especificacion,
-            cantidad, unidad, proveedor, orden_servicio,
-            fecha_avanzada, link_avanzada, fecha_inspeccion, link_inspeccion,
-            logistica, alerta, comentario
-         ) VALUES (
-            $1,$2,$3,$4,$5,$6,
-            $7,$8,$9,$10,
-            $11,$12,$13,$14,
-            $15,$16,$17
-         ) RETURNING id`,
+         well_id, stage_id, material_name, programa, categoria, especificacion,
+         cantidad, unidad, proveedor, orden_servicio,
+         fecha_avanzada, link_avanzada,
+         fecha_inspeccion, link_inspeccion,
+         logistica, alerta, comentario
+       ) VALUES (
+         $1,$2,$3,$4,$5,$6,
+         $7,$8,$9,$10,
+         $11,$12,
+         $13,$14,
+         $15,$16,$17
+       ) RETURNING id`,
         [
-          well_id,
-          stage_id,
-          c.material_name || null,
-          (c.programa || "").toLowerCase() || null, // 'programa'|'contingencia'
-          c.categoria || null,
-          c.especificacion || null,
-          c.cantidad ?? null,
-          c.unidad || null,
-          c.proveedor || null,
-          c.orden_servicio || null,
-          c.fecha_avanzada || null,
-          c.link_avanzada || null,
-          c.fecha_inspeccion || null,
-          c.link_inspeccion || null,
-          c.logistica || null,
-          (c.alerta || "").toLowerCase() || null,  // 'azul'|'verde'|'amarillo'|'rojo'
-          c.comentario || null,
+          wellId,
+          stageId,
+          materialNameVal,
+          programaVal,
+          categoriaVal,
+          especificacionVal,
+          cantidadVal,
+          unidadVal,
+          proveedorVal,
+          ordenServicioVal,
+          fechaAvanzadaVal,
+          linkAvanzadaVal,
+          fechaInspeccionVal,
+          linkInspeccionVal,
+          logisticaVal,
+          alertaVal,
+          comentarioVal,
         ]
       );
-      res.json({ ok: true, id: ins.rows[0].id });
+
+      return res.json({ ok: true, id: ins.rows[0].id });
     } catch (e) {
-      res.status(500).json({ ok: false, error: e.message });
+      console.error("POST /stages/:id/materials error:", e);
+      return res
+        .status(500)
+        .json({ ok: false, error: "Error interno. Contacta al administrador." });
     }
   });
 
-  // PUT /materials/:id  (actualizar sin borrar campos si vienen vacíos y tipando parámetros)
-  router.put("/materials/:id", async (req, res) => {
+
+
+  // PUT /materials/:id (actualizar sin borrar campos si vienen vacíos)
+  router.put("/materials/:id", requireRole('admin', 'editor'), async (req, res) => {
     try {
       const id = Number(req.params.id);
+      if (!Number.isInteger(id)) {
+        return res.status(400).json({ ok: false, error: "Material inválido" });
+      }
+
       const c = req.body || {};
+
+      // Sanitizadores
+      const cleanText = (v) =>
+        v === "" || v === undefined || v === null ? null : String(v);
+
+      const cleanNum = (v) => {
+        if (v === "" || v === undefined || v === null) return null;
+        const n = Number(v);
+        return Number.isFinite(n) ? n : null;
+      };
+
+      const cleanDate = (v) =>
+        v === "" || v === undefined || v === null ? null : String(v);
+
+      const programaVal = cleanText(c.programa && String(c.programa).toLowerCase());
+      const categoriaVal = cleanText(c.categoria);
+      const especificacionVal = cleanText(c.especificacion);
+      const cantidadVal = cleanNum(c.cantidad);
+      const unidadVal = cleanText(c.unidad);
+      const proveedorVal = cleanText(c.proveedor);
+      const ordenServicioVal = cleanText(c.orden_servicio);
+      const fechaAvanzadaVal = cleanDate(c.fecha_avanzada);
+      const linkAvanzadaVal = cleanText(c.link_avanzada);
+      const fechaInspeccionVal = cleanDate(c.fecha_inspeccion);
+      const linkInspeccionVal = cleanText(c.link_inspeccion);
+      const logisticaVal = cleanText(c.logistica);
+      const alertaVal = cleanText(c.alerta && String(c.alerta).toLowerCase());
+      const comentarioVal = cleanText(c.comentario);
 
       await pool.query(
         `
       UPDATE public.materials SET
-        material_name    = COALESCE(NULLIF($1::text, ''), material_name),
-        /* Si programa/alerta son ENUM en tu DB, deja los casts al enum.
-           Si son TEXT, quita ::public.program_type / ::public.alert_type. */
-        programa         = COALESCE(NULLIF($2::text, '')::public.program_type, programa),
-        categoria        = COALESCE(NULLIF($3::text, ''), categoria),
-        especificacion   = COALESCE(NULLIF($4::text, ''), especificacion),
-        cantidad         = COALESCE($5::numeric, cantidad),
-        unidad           = COALESCE(NULLIF($6::text, ''), unidad),
-        proveedor        = COALESCE(NULLIF($7::text, ''), proveedor),
-        orden_servicio   = COALESCE(NULLIF($8::text, ''), orden_servicio),
-        fecha_avanzada   = COALESCE($9::date, fecha_avanzada),
-        link_avanzada    = COALESCE(NULLIF($10::text, ''), link_avanzada),
-        fecha_inspeccion = COALESCE($11::date, fecha_inspeccion),
-        link_inspeccion  = COALESCE(NULLIF($12::text, ''), link_inspeccion),
-        logistica        = COALESCE(NULLIF($13::text, ''), logistica),
-        alerta           = COALESCE(NULLIF($14::text, '')::public.alert_type, alerta),
-        comentario       = COALESCE(NULLIF($15::text, ''), comentario)
-      WHERE id = $16
+        programa        = COALESCE($1, programa),
+        categoria       = COALESCE($2, categoria),
+        especificacion  = COALESCE($3, especificacion),
+        cantidad        = COALESCE($4, cantidad),
+        unidad          = COALESCE($5, unidad),
+        proveedor       = COALESCE($6, proveedor),
+        orden_servicio  = COALESCE($7, orden_servicio),
+        fecha_avanzada  = COALESCE($8, fecha_avanzada),
+        link_avanzada   = COALESCE($9, link_avanzada),
+        fecha_inspeccion= COALESCE($10, fecha_inspeccion),
+        link_inspeccion = COALESCE($11, link_inspeccion),
+        logistica       = COALESCE($12, logistica),
+        alerta          = COALESCE($13, alerta),
+        comentario      = COALESCE($14, comentario)
+      WHERE id = $15
       `,
         [
-          c.material_name ?? null,
-          (c.programa ?? null) && String(c.programa).toLowerCase(),
-          c.categoria ?? null,
-          c.especificacion ?? null,
-          c.cantidad ?? null,
-          c.unidad ?? null,
-          c.proveedor ?? null,
-          c.orden_servicio ?? null,
-          c.fecha_avanzada ?? null,
-          c.link_avanzada ?? null,
-          c.fecha_inspeccion ?? null,
-          c.link_inspeccion ?? null,
-          c.logistica ?? null,
-          (c.alerta ?? null) && String(c.alerta).toLowerCase(),
-          c.comentario ?? null,
+          programaVal,
+          categoriaVal,
+          especificacionVal,
+          cantidadVal,
+          unidadVal,
+          proveedorVal,
+          ordenServicioVal,
+          fechaAvanzadaVal,
+          linkAvanzadaVal,
+          fechaInspeccionVal,
+          linkInspeccionVal,
+          logisticaVal,
+          alertaVal,
+          comentarioVal,
           id,
         ]
       );
 
       res.json({ ok: true });
     } catch (e) {
-      res.status(500).json({ ok: false, error: e.message });
+      console.error("PUT /materials/:id error:", e);
+      res.status(500).json({ ok: false, error: "Error interno. Contacta al administrador." });
     }
   });
-
 
 
   // DELETE /materials/:id
-  router.delete("/materials/:id", async (req, res) => {
+  router.delete("/materials/:id", requireRole('admin', 'editor'), async (req, res) => {
     try {
       const id = Number(req.params.id);
+      if (!Number.isInteger(id)) {
+        return res.status(400).json({ ok: false, error: "Material inválido" });
+      }
       await pool.query("DELETE FROM public.materials WHERE id = $1", [id]);
       res.json({ ok: true });
     } catch (e) {
-      res.status(500).json({ ok: false, error: e.message });
+      console.error("DELETE /materials/:id error:", e);
+      res.status(500).json({ ok: false, error: "Error interno. Contacta al administrador." });
     }
   });
+
+
 
   // =========================
   //          ALERTAS
@@ -582,19 +755,24 @@ export default function buildOperativoRoutes(pool) {
       const where = ["1=1"];
       const params = [];
 
-      // Filtros opcionales
       if (well) {
         params.push(Number(well));
         where.push(`w.id = $${params.length}`);
       }
+
       if (stage) {
         params.push(Number(stage));
         where.push(`s.id = $${params.length}`);
       }
-      if (alerta && ["azul", "verde", "amarillo", "rojo"].includes(String(alerta).toLowerCase())) {
-        params.push(String(alerta).toLowerCase());
-        where.push(`m.alerta = $${params.length}::public.alert_type`);
+
+      if (alerta) {
+        const a = String(alerta).toLowerCase();
+        if (["azul", "verde", "amarillo", "rojo"].includes(a)) {
+          params.push(a);
+          where.push(`m.alerta = $${params.length}`);
+        }
       }
+
 
       // Orden por severidad (rojo > amarillo > verde > azul), luego pozo/etapa
       const sql = `
@@ -609,18 +787,20 @@ export default function buildOperativoRoutes(pool) {
         m.comentario
       FROM public.materials m
       JOIN public.well_stages s ON s.id = m.stage_id
-      JOIN public.wells w       ON w.id = s.well_id
+      JOIN public.wells       w ON w.id = s.well_id
       WHERE ${where.join(" AND ")}
-      ORDER BY CASE m.alerta
-                 WHEN 'rojo'::public.alert_type      THEN 0
-                 WHEN 'amarillo'::public.alert_type  THEN 1
-                 WHEN 'verde'::public.alert_type     THEN 2
-                 ELSE 3
-               END,
-               w.name ASC,
-               s.order_index ASC,
-               m.id ASC
-    `;
+      ORDER BY
+        CASE m.alerta
+          WHEN 'rojo' THEN 1
+          WHEN 'amarillo' THEN 2
+          WHEN 'verde' THEN 3
+          WHEN 'azul' THEN 4
+          ELSE 5
+        END,
+        w.name ASC,
+        s.order_index ASC,
+        m.id ASC
+      `;
       const r = await pool.query(sql, params);
 
       // Para dropdowns en el cliente
@@ -638,8 +818,10 @@ export default function buildOperativoRoutes(pool) {
         edit: { api: "/api/operativo/materials/:id", method: "PUT" }
       });
     } catch (e) {
-      res.status(500).json({ ok: false, error: e.message });
+      console.error('Error INSERT material:', e);
+      res.status(500).json({ ok: false, error: "Error interno. Contacta al administrador." });
     }
+
   });
 
   return router;

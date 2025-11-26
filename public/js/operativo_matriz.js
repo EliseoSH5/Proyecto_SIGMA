@@ -1,9 +1,9 @@
-import { api, confirmDialog } from './operativo_shared.js';
+import { api, confirmDialog, escapeHtml } from './operativo_shared.js';
+
 
 const body = document.getElementById('wellsBody');
 const empty = document.getElementById('emptyState');
 const addBtn = document.getElementById('btnAdd');
-
 const panel = document.getElementById('filters');
 const btnFilter = document.getElementById('btnFilter');
 const fSearch = document.getElementById('fSearch');
@@ -23,18 +23,23 @@ function row(w) {
   const tr = document.createElement('tr');
 
   // Texto a mostrar en "Avance actual"
-  const avance =
+  const avanceText =
     w.current_progress
       ? w.current_progress                             // viene calculado del backend
       : (w.first_stage
-        ? `Etapa ${w.first_stage} - En proceso`      // pozo con etapas pero sin progress
-        : 'Sin etapas');                             // pozo sin etapas
+        ? `Etapa ${w.first_stage} - En proceso`        // pozo con etapas pero sin progress
+        : 'Sin etapas');                               // pozo sin etapas
+
+  // Escapar textos para evitar XSS
+  const teamSafe = escapeHtml(w.team || '-');
+  const nameSafe = escapeHtml(w.name || '');
+  const avanceSafe = escapeHtml(avanceText);
 
   tr.innerHTML = `
     <td><input type="checkbox"/></td>
-    <td>${w.team || '-'}</td>
-    <td>${w.name}</td>
-    <td>${avance}</td>
+    <td>${teamSafe}</td>
+    <td>${nameSafe}</td>
+    <td>${avanceSafe}</td>
     <td class="actions">
       <a title="Ver etapas" data-action="view">👁️</a>
       <a title="Editar pozo" data-action="edit">✏️</a>
@@ -71,7 +76,6 @@ function row(w) {
     if (fAlert?.value) qs.set('alerta', fAlert.value);
     // include_empty=1 si quieres hojas sin materiales
     const url = `/api/operativo/planeacion/export/by-well/${w.id}${qs.toString() ? `?${qs.toString()}` : ""}`;
-
 
     // Nombre seguro para el archivo
     const safeName = String(w.name || 'pozo')
@@ -116,6 +120,7 @@ function row(w) {
 
   return tr;
 }
+
 
 
 async function load() {
