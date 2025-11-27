@@ -1,0 +1,40 @@
+version: '3.9'
+
+services:
+  db:
+    image: postgres:16
+    container_name: sigma_db
+    environment:
+      POSTGRES_DB: sigma_db
+      POSTGRES_USER: sigma_user
+      POSTGRES_PASSWORD: sigma_pass
+    ports:
+      - "5432:5432"   # opcional si quieres conectar desde tu PC (DBeaver, etc.)
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./db/operativo_schema.sql:/docker-entrypoint-initdb.d/operativo_schema.sql:ro
+
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sigma_server
+    depends_on:
+      - db
+    ports:
+      - "3000:3000"
+    environment:
+      # Config DB para que el server use el contenedor "db"
+      PGHOST: db
+      PGPORT: 5432
+      PGDATABASE: sigma_db
+      PGUSER: sigma_user
+      PGPASSWORD: sigma_pass
+
+      # Config app
+      PORT: 3000
+      JWT_SECRET: 84bc3f9cea4eba8938e57a6546f188f3573b23c42654dd4aade1ae8cfe5878906d2d4cc9704051ca587427d22f33bbe8
+      # Si en el futuro agregas SSL a Postgres, aquí podrías agregar variables extra
+
+volumes:
+  db_data:
