@@ -2,7 +2,7 @@
 // Alertas: lista de materiales (todas las alertas) + filtros (Pozo, Etapa[dedup por nombre], Alerta)
 // + modal de detalle + botón Editar -> FORMULARIO MATERIAL + cierre de modal robusto
 
-import { api } from "./operativo_shared.js";
+import { api, getCurrentUser } from "./operativo_shared.js";
 
 // === Página a la que iremos al EDITAR un material desde alertas ===
 const MATERIAL_INFO_PAGE = "/operativo_material_form.html";
@@ -43,6 +43,7 @@ const btnInspeccion = document.getElementById("btnInspeccion");
 
 // --- helpers ---
 const ALERT_LEVELS = ["azul", "verde", "amarillo", "rojo"];
+let isViewer = false; // se setea según el rol del usuario
 
 const fmtDate = (d) => {
   if (!d) return "-";
@@ -193,6 +194,11 @@ async function openDetail(id) {
 // --- fila de tabla ---
 function row(it) {
   const tr = document.createElement("tr");
+
+  const editHtml = isViewer
+    ? "" // viewer no ve el botón de editar
+    : `<a title="Editar" data-action="edit" class="ml-2">✏️</a>`;
+
   tr.innerHTML = `
     <td>${it.well_name}</td>
     <td>${it.stage_name}</td>
@@ -201,11 +207,16 @@ function row(it) {
     <td>${it.comentario || ""}</td>
     <td class="actions">
       <a title="Ver" data-action="view">👁️</a>
-      <a title="Editar" data-action="edit" class="ml-2">✏️</a>
+      ${editHtml}
     </td>
   `;
+
   tr.querySelector('[data-action="view"]')?.addEventListener("click", () => openDetail(it.material_id));
-  tr.querySelector('[data-action="edit"]')?.addEventListener("click", () => goToMaterialInfo(it));
+
+  if (!isViewer) {
+    tr.querySelector('[data-action="edit"]')?.addEventListener("click", () => goToMaterialInfo(it));
+  }
+
   return tr;
 }
 
@@ -241,7 +252,11 @@ async function load() {
   if (fWell?.value)  paramsForFetch.set("well",  fWell.value);
   if (fAlert?.value) paramsForFetch.set("alerta", fAlert.value);
 
-  const r = await api.get("/api/operativo/alerts" + (paramsForFetch.toString() ? `?${paramsForFetch.toString()}` : ""));
+  const r = await api.get(
+    "/api/operativo/alerts" +
+    (paramsForFetch.toString() ? `?${paramsForFetch.toString()}` : "")
+  );
+
   if (!r.ok) {
     console.error("Alerts error:", r.error);
     alert(r.error || "Error cargando alertas");
@@ -286,5 +301,17 @@ async function load() {
   rowsToRender.forEach((it) => body.appendChild(row(it)));
 }
 
+// ===== init: respetar el rol del usuario antes de pintar =====
+async function init() {
+  try {
+    const u = await getCurrentUser();
+    const role = (u?.role || 'admin').toLowerCase();
+    isViewer = role === 'viewer';
+  } catch {
+    isViewer = false;
+  }
+  await load();
+}
+
 // primera carga
-load();
+init();

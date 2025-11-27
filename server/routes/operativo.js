@@ -6,15 +6,19 @@ const router = express.Router();
 // Uso: requireRole('admin') o requireRole('admin','editor')
 function requireRole(...roles) {
   return (req, res, next) => {
-    const user = req.user || {};
-    // Si por alguna razón el token viejo no tenía role, asumimos 'admin' para no romper.
-    const role = user.role || 'admin';
+    const user = req.user;
+
+    // Si no hay usuario o no tiene rol → fuera
+    if (!user || !user.role) {
+      return res.status(403).json({ ok: false, error: 'No autorizado' });
+    }
+
+    const { role } = user;
 
     if (!roles.includes(role)) {
-      return res
-        .status(403)
-        .json({ ok: false, error: 'Permisos insuficientes para esta acción.' });
+      return res.status(403).json({ ok: false, error: 'No autorizado' });
     }
+
     next();
   };
 }

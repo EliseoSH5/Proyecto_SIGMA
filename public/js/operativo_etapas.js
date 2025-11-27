@@ -1,11 +1,11 @@
-import { api, qs, confirmDialog, escapeHtml } from './operativo_shared.js';
+import { api, qs, confirmDialog, escapeHtml, getCurrentUser } from './operativo_shared.js';
 
 const wellId = qs('well');
 const body = document.getElementById('stagesBody');
 
 let saving = false;
 let snapshotIds = []; // para revertir si falla
-
+let isViewer = false; // true si el rol es "viewer"
 
 function trForStage(s){
   const tr = document.createElement('tr');
@@ -15,6 +15,15 @@ function trForStage(s){
   // Texto seguro
   const stageNameSafe = escapeHtml(s.stage_name || '-');
   const pipeSafe = escapeHtml(s.pipe || '-');
+
+  // Acciones: para viewer solo "Ver materiales"
+  const actionsHtml = isViewer
+    ? `<a title="Ver materiales" data-action="view">👁️</a>`
+    : `
+      <a title="Ver materiales" data-action="view">👁️</a>
+      <a title="Editar" data-action="edit">✏️</a>
+      <a title="Borrar" data-action="del">🗑️</a>
+    `;
 
   tr.innerHTML = `
     <td class="drag-handle">☰</td>
@@ -27,9 +36,7 @@ function trForStage(s){
       </select>
     </td>
     <td class="actions">
-      <a title="Ver materiales" data-action="view">👁️</a>
-      <a title="Editar" data-action="edit">✏️</a>
-      <a title="Borrar" data-action="del">🗑️</a>
+      ${actionsHtml}
     </td>`;
 
   // --- control de avance ---
@@ -40,70 +47,80 @@ function trForStage(s){
     ? 'completado'
     : 'en_proceso';
 
-  progressSelect.addEventListener('change', async () => {
-    const v = progressSelect.value;
-    const label = v === 'completado' ? 'Completado' : 'En proceso';
+  // Viewer no puede cambiar el avance
+  if (isViewer) {
+    progressSelect.disabled = true;
+  } else {
+    progressSelect.addEventListener('change', async () => {
+      const v = progressSelect.value;
+      const label = v === 'completado' ? 'Completado' : 'En proceso';
 
-    const res = await api.put(`/api/operativo/stages/${s.id}`, { progress: label });
-    if (!res.ok) {
-      alert(res.error || 'Error al actualizar el avance');
-      progressSelect.value = initialProgress.startsWith('complet')
-        ? 'completado'
-        : 'en_proceso';
-    } else {
-      s.progress = label;
-    }
-  });
+      const res = await api.put(`/api/operativo/stages/${s.id}`, { progress: label });
+      if (!res.ok) {
+        alert(res.error || 'Error al actualizar el avance');
+        progressSelect.value = initialProgress.startsWith('complet')
+          ? 'completado'
+          : 'en_proceso';
+      } else {
+        s.progress = label;
+      }
+    });
+  }
 
-  // --- acciones existentes ---
-  tr.querySelector('[data-action="view"]').addEventListener('click',()=>{
+  // --- acciones ---
+  tr.querySelector('[data-action="view"]')?.addEventListener('click',()=>{
     window.location.href = `./operativo_materiales.html?stage=${s.id}&well=${wellId}`;
   });
 
-  tr.querySelector('[data-action="edit"]').addEventListener('click',async ()=>{
-    const nn = prompt('Nuevo nombre de etapa', s.stage_name||'');
-    if(nn===null) return;
-    const res = await api.put(`/api/operativo/stages/${s.id}`, { stage_name: nn });
-    if(res.ok) load(); else alert(res.error||'Error');
-  });
+  if (!isViewer) {
+    tr.querySelector('[data-action="edit"]')?.addEventListener('click',async ()=>{
+      const nn = prompt('Nuevo nombre de etapa', s.stage_name||'');
+      if(nn===null) return;
+      const res = await api.put(`/api/operativo/stages/${s.id}`, { stage_name: nn });
+      if(res.ok) load(); else alert(res.error||'Error');
+    });
 
-  tr.querySelector('[data-action="del"]').addEventListener('click', async ()=>{
-    const ok = await confirmDialog();
-    if(!ok) return;
-    const res = await api.del(`/api/operativo/stages/${s.id}`);
-    if(res.ok) load(); else alert(res.error||'Error');
-  });
+    tr.querySelector('[data-action="del"]')?.addEventListener('click', async ()=>{
+      const ok = await confirmDialog();
+      if(!ok) return;
+      const res = await api.del(`/api/operativo/stages/${s.id}`);
+      if(res.ok) load(); else alert(res.error||'Error');
+    });
+  }
 
   // --- drag & drop + autosave ---
-  tr.addEventListener('dragstart', (e)=>{
-    tr.classList.add('dragging');
-    e.dataTransfer.effectAllowed = 'move';
-    snapshotIds = currentIds(); // guarda orden actual
-  });
+  // Viewer no puede reordenar etapas
+  if (!isViewer) {
+    tr.addEventListener('dragstart', (e)=>{
+      tr.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      snapshotIds = currentIds(); // guarda orden actual
+    });
 
-  tr.addEventListener('dragend', async ()=>{
-    tr.classList.remove('dragging');
-    await autosaveOrder(); // guarda nuevo orden en el backend
-  });
+    tr.addEventListener('dragend', async ()=>{
+      tr.classList.remove('dragging');
+      await autosaveOrder(); // guarda nuevo orden en el backend
+    });
 
-  tr.addEventListener('dragover', (e)=>{
-    e.preventDefault();
-    const afterElement = getDragAfterElement(body, e.clientY);
-    const dragging = document.querySelector('.dragging');
-    if(!dragging) return;
-    if(afterElement == null){
-      body.appendChild(dragging);
-    }else{
-      body.insertBefore(dragging, afterElement);
-    }
-  });
+    tr.addEventListener('dragover', (e)=>{
+      e.preventDefault();
+      const afterElement = getDragAfterElement(body, e.clientY);
+      const dragging = document.querySelector('.dragging');
+      if(!dragging) return;
+      if(afterElement == null){
+        body.appendChild(dragging);
+      }else{
+        body.insertBefore(dragging, afterElement);
+      }
+    });
+  }
 
   return tr;
 }
 
-
-
+// Drag over general: si es viewer, no hace nada
 body.addEventListener('dragover', (e)=>{
+  if (isViewer) return;
   e.preventDefault();
   const dragging = body.querySelector('tr.dragging');
   if(!dragging) return;
@@ -164,7 +181,6 @@ function showSaving(on){
     badge.id = 'orderStatus';
     badge.style.marginLeft = '8px';
     badge.className = 'small muted';
-    // intenta colocarlo junto a los controles de orden si existen
     const toolbar = document.querySelector('.toolbar div');
     (toolbar||document.body).appendChild(badge);
   }
@@ -186,5 +202,14 @@ async function load(){
   res.data.forEach(s => body.appendChild(trForStage(s)));
 }
 
-
-load();
+// Inicializar respetando el rol
+(async function init() {
+  try {
+    const u = await getCurrentUser();
+    const role = (u?.role || 'admin').toLowerCase();
+    isViewer = role === 'viewer';
+  } catch {
+    isViewer = false;
+  }
+  load();
+})();

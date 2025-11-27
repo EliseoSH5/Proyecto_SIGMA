@@ -30,3 +30,27 @@ export function escapeHtml(str) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 }
+
+// ====== Auth helper: obtener usuario actual (id, email, fullName, role) ======
+let _userCache = null;
+let _userPromise = null;
+
+export async function getCurrentUser() {
+  if (_userCache) return _userCache;
+  if (!_userPromise) {
+    _userPromise = api
+      .get('/api/auth/me')
+      .then((res) => {
+        // Ajusta a tu respuesta real, pero normalmente es { ok, user }
+        const user = res.user || res.data?.user || null;
+        _userCache = user;
+        return user;
+      })
+      .catch((err) => {
+        console.error('[getCurrentUser] error:', err);
+        _userCache = null;
+        return null;
+      });
+  }
+  return _userPromise;
+}
