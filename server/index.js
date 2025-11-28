@@ -304,16 +304,22 @@ app.get('*', (_req, res) =>
 );
 
 // ====== Seeder opcional (crea usuario si no existe) ======
-async function seed(email, full, pass) {
-  const hash = await bcrypt.hash(pass, 10);
+async function seed(email, fullName, password, role = 'viewer') {
+  const hash = await bcrypt.hash(password, 10);
+
   await pool.query(
-    `INSERT INTO users (full_name, email, password_hash)
-     VALUES ($1,$2,$3)
-     ON CONFLICT (email) DO NOTHING`,
-    [full, email, hash],
+    `INSERT INTO users (email, full_name, password_hash, role)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (email) DO UPDATE
+       SET full_name = EXCLUDED.full_name,
+           password_hash = EXCLUDED.password_hash,
+           role = EXCLUDED.role`,
+    [email, fullName, hash, role]
   );
-  console.log(`Usuario semilla: ${email} / ${pass}`);
+
+  console.log(`Usuario seed creado/actualizado: ${email} (${role})`);
 }
+
 
 // ====== Manejo global de errores ======
 
@@ -344,14 +350,36 @@ app.use((err, req, res, next) => {
     .send('Error interno. Contacta al administrador.');
 });
 
-
+// users
 const PORT = Number(process.env.PORT || 3000);
+
 if (process.argv[2] === 'seed') {
   console.log(process.argv);
+
   const email = process.argv[3];
   const full = process.argv[4];
   const pass = process.argv[5];
-  seed(email, full, pass).then(() => process.exit(0));
+  const role = process.argv[6] || 'viewer'; // por defecto viewer
+
+  const allowedRoles = ['admin', 'editor', 'viewer'];
+
+  if (!email || !full || !pass) {
+    console.error('Uso: node index.js seed <email> "<Nombre completo>" <password> [rol]');
+    console.error('Roles válidos (opcional): admin | editor | viewer');
+    process.exit(1);
+  }
+
+  if (!allowedRoles.includes(role)) {
+    console.error(`Rol inválido: ${role}. Roles válidos: admin | editor | viewer`);
+    process.exit(1);
+  }
+
+  seed(email, full, pass, role)
+    .then(() => process.exit(0))
+    .catch((err) => {
+      console.error('Error en seed:', err);
+      process.exit(1);
+    });
 } else {
   app.listen(PORT, () =>
     console.log(`SIGMA server en http://localhost:${PORT}`),
