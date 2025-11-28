@@ -20,7 +20,7 @@ COPY public ./public
 ENV NODE_ENV=production
 
 # Exponer el puerto del servidor Express
-EXPOSE 3000
+EXPOSE 1515
 
 # Arranque del backend
 WORKDIR /usr/src/app/server
