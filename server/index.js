@@ -18,6 +18,14 @@ dotenv.config();
 
 const app = express();
 
+function requireEnv(name) {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`Falta variable de entorno requerida: ${name}`);
+  }
+  return value;
+}
+
 // Si más adelante pones SIGMA detrás de un proxy (Nginx, etc.),
 // esto ayuda a que express-rate-limit use la IP real del cliente.
 app.set('trust proxy', 1);
@@ -25,16 +33,18 @@ app.set('trust proxy', 1);
 // Ocultar cabecera X-Powered-By: Express
 app.disable('x-powered-by');
 
-console.log(
-  'DB cfg =>',
-  process.env.PGHOST,
-  process.env.PGPORT,
-  process.env.PGDATABASE,
-  process.env.PGUSER,
-);
-
 // === Entorno (dev / prod) ===
 const isProd = process.env.NODE_ENV === 'production';
+const JWT_SECRET = requireEnv('JWT_SECRET');
+const PGHOST = requireEnv('PGHOST');
+const PGUSER = requireEnv('PGUSER');
+const PGPASSWORD = requireEnv('PGPASSWORD');
+const PGDATABASE = requireEnv('PGDATABASE');
+const PGPORT = Number(process.env.PGPORT || 5432);
+
+if (!isProd) {
+  console.log('DB cfg =>', PGHOST, PGPORT, PGDATABASE, PGUSER);
+}
 
 function buildCookieOptions(remember) {
   return {
@@ -136,18 +146,18 @@ function csrfGuard(req, res, next) {
 
 // DB
 const pool = new Pool({
-  host: process.env.PGHOST,
-  port: Number(process.env.PGPORT || 5432),
-  user: process.env.PGUSER,
-  password: process.env.PGPASSWORD,
-  database: process.env.PGDATABASE,
+  host: PGHOST,
+  port: PGPORT,
+  user: PGUSER,
+  password: PGPASSWORD,
+  database: PGDATABASE,
 });
 
 // Utils
 function signToken(payload, remember) {
   // 7 días si “Recordarme”, si no usa JWT_EXPIRES o 8h por defecto
   const expiresIn = remember ? '7d' : (process.env.JWT_EXPIRES || '8h');
-  return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn });
+  return jwt.sign(payload, JWT_SECRET, { expiresIn });
 }
 
 function authMiddleware(req, res, next) {
@@ -156,7 +166,7 @@ function authMiddleware(req, res, next) {
     return res.status(401).json({ ok: false, error: 'No autorizado' });
   }
   try {
-    const data = jwt.verify(token, process.env.JWT_SECRET);
+    const data = jwt.verify(token, JWT_SECRET);
     req.user = data;
     next();
   } catch {
